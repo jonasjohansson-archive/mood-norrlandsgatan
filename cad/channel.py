@@ -1,50 +1,44 @@
-"""Core parametric LED U-channel — the building block of the Mood ceiling artwork.
+"""Core parametric geometry for the Mood ceiling — the SNAP-GROOVE HOST.
 
-The physical part is a "channel-letter" tray: a flat aluminium back-plate with
-return walls bent on edge along a path, and silicone LED neon-flex seated in the
-slot, light facing down. We model it the same way it's built:
+You push silicone neon-flex into a glossy host panel; an undercut groove grips it
+so it can't drop out overhead. The host hangs off the existing ceiling STEEL
+PROFILES via brackets. Same path drives the groove, the neon and the viewer.
 
-    back-plate (flat sheet)         z in [0, BACK_T]
-    return walls (along path)       z in [-(WALL_H+NEON_H), 0]
-    neon-flex (in the slot, mouth)  z in [-(WALL_H+NEON_H), -WALL_H]
+Layout (z up = toward ceiling; room is below at -z):
+    host panel        z in [0, PANEL_T]
+    snap-groove       carved from the underside, depth SLOT_DEPTH
+    neon-flex         in the groove, PROUD mm below the panel face
+    bracket tabs      on top, bolt to the steel profile above
 
-All dimensions in millimetres. Tune NEON_W / SLOT_CLR with calibrate.py before
-committing — the snap fit is product-dependent.
+All dimensions in millimetres. Tune NEON_W / SLOT_CLR with calibrate.py.
 """
 from dataclasses import dataclass
 from build123d import (
-    BuildLine, BuildSketch, Spline, Polyline, CenterArc,
-    trace, extrude, Pos, Plane,
+    BuildLine, BuildSketch, Spline, Polyline, CenterArc, Circle, Box, Cylinder,
+    Align, Pos, trace, extrude,
 )
 
 
 @dataclass
-class ChannelParams:
-    neon_w: float = 16.0      # silicone neon-flex width (top view)
-    neon_h: float = 16.0      # neon-flex height (into the slot)
-    wall_t: float = 2.0       # aluminium return-wall thickness
-    wall_h: float = 10.0      # wall shielding height above the neon face
-    back_t: float = 3.0       # back-plate thickness
-    slot_clr: float = 0.4     # per-side clearance neon <-> wall (snap fit)
+class HostParams:
+    neon_w: float = 16.0      # silicone neon-flex width
+    neon_h: float = 14.0      # neon-flex height
+    slot_clr: float = 0.4     # per-side push-fit clearance
+    slot_depth: float = 12.0  # how deep the groove is cut into the panel
+    lip: float = 1.2          # undercut retaining lip per side (dovetail bit)
+    proud: float = 2.0        # how far the neon sits below the panel face (glow)
+    panel_t: float = 20.0     # glossy host panel thickness
 
     @property
-    def inner_w(self) -> float:
+    def slot_w(self) -> float:
         return self.neon_w + 2 * self.slot_clr
-
-    @property
-    def outer_w(self) -> float:
-        return self.inner_w + 2 * self.wall_t
-
-    @property
-    def depth(self) -> float:
-        return self.wall_h + self.neon_h
 
 
 # ---- path helpers -----------------------------------------------------------
-# A "path" is (kind, points): the centreline the channel follows in the XY plane.
-#   ("spline",   [(x,y), ...])      smooth flowing line (figures)
-#   ("polyline", [(x,y), ...])      straight segments (grid)
-#   ("circle",   [(cx, cy, r)])     full ring (the columns)
+# A "path" is (kind, points): the neon centreline in the XY plane (mm).
+#   ("spline",   [(x,y), ...])   smooth flowing line (bodies)
+#   ("polyline", [(x,y), ...])   straight segments
+#   ("circle",   [(cx,cy,r)])    full ring
 
 def path_line(kind, points):
     with BuildLine() as ln:
@@ -62,24 +56,29 @@ def path_line(kind, points):
 
 # ---- solids -----------------------------------------------------------------
 
-def walls(line, p: ChannelParams):
-    """The aluminium return walls (the U, minus its back) extruded down."""
-    outer = trace(line, line_width=p.outer_w)
-    inner = trace(line, line_width=p.inner_w)
-    ribbon = outer - inner
-    return extrude(ribbon, amount=-p.depth)
+def groove(line, p: HostParams):
+    """Solid to SUBTRACT from the panel to form the push-fit slot (cut from below)."""
+    return extrude(trace(line, line_width=p.slot_w), amount=p.slot_depth)
 
 
-def neon(line, p: ChannelParams):
-    """The lit silicone neon tube, seated at the mouth (for the viewer/glow)."""
-    tube = extrude(trace(line, line_width=p.neon_w), amount=-p.neon_h)
-    return Pos(0, 0, -p.wall_h) * tube
+def neon(line, p: HostParams):
+    """The lit silicone tube, seated in the groove, PROUD below the panel face."""
+    tube = extrude(trace(line, line_width=p.neon_w), amount=p.neon_h)
+    return Pos(0, 0, -p.proud) * tube
 
 
-def coupon(p: ChannelParams, length: float = 120.0):
-    """A straight test segment: back-plate + walls + neon, for fit checks."""
+def bracket(x, y, p: HostParams, size=60.0, hole_r=5.5, h=40.0):
+    """A tab on the panel top that bolts up to a steel profile."""
+    tab = Pos(x, y, p.panel_t) * Box(size, size, h,
+                                     align=(Align.CENTER, Align.CENTER, Align.MIN))
+    bolt = Pos(x, y, p.panel_t) * Cylinder(hole_r, h + 2,
+                                           align=(Align.CENTER, Align.CENTER, Align.MIN))
+    return tab - bolt
+
+
+def coupon(p: HostParams, length: float = 120.0):
+    """Straight test piece: glossy panel + grooved slot + neon, for snap-fit checks."""
     line = path_line("polyline", [(0, 0), (length, 0)])
-    w = walls(line, p)
-    n = neon(line, p)
-    back = extrude(trace(line, line_width=p.outer_w), amount=p.back_t)
-    return back + w, n
+    panel = extrude(trace(line, line_width=p.slot_w + 60), amount=p.panel_t)
+    panel -= groove(line, p)
+    return panel, neon(line, p)

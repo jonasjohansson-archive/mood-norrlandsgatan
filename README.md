@@ -1,49 +1,67 @@
-# Mood Norrlandsgatan — ceiling artwork prototype
+# Mood Norrlandsgatan — "People in Orbit"
 
-Code-CAD + browser prototype for the **AMF / Mood Gallerian** entrance light
-installation (Norrlandsgatan, Stockholm). Replaces Peter Hagdahl's *Liquid Sky*;
-brief calls for a ceiling-mounted, light-bearing, weather-resistant work with a
-**10-year** lifespan, 3 m clearance, fire compliance (PBL — bygglov granted).
+CAD + browser ideation for the **AMF / Mood Gallerian** entrance light installation
+(Norrlandsgatan, Stockholm). Replaces Peter Hagdahl's *Liquid Sky*. Concept:
+**glowing human-like bodies that orbit the entrance columns**, made of colored
+**silicone neon-flex**, pushed into a **glossy snap-groove host** that is bracketed
+to the **existing ceiling steel profiles**. Addressable RGB, animated like a school
+of carp; a hand-sensor on a column lets visitors make the lights react.
 
-The piece is built as **channel-letter trays**: a flat aluminium back-plate with
-return walls bent on edge along the figure paths, **silicone LED neon-flex** seated
-in the slot, light facing down. The walls are the heatsink + the matte surround.
+Brief: ceiling-mounted, light-bearing, weather-resistant, **10-year** life, 3 m
+clearance, fire (PBL — bygglov granted). Canopy ≈ **9 × 5 m**.
+
+## The system
+```
+  existing steel profile  ═══════════════════
+           │ bracket (bolts to the profile)
+  ┌────────┴───────────────────────────────┐
+  │  GLOSSY HOST PANEL (dark, high-gloss)   │  reflects the neon
+  │     ╲__╱  snap-groove (undercut)        │
+  └───────┐(○)┌────────────────────────────┘
+          neon-flex pushed in, light down
+```
+One set of **paths** drives everything: you draw the bodies in the web tool, it
+exports `paths.json`, and the CAD turns those exact paths into the grooved host +
+neon + brackets for fabrication.
 
 ## Layout
 ```
 cad/
-  channel.py     # core parametric U-channel (cross-section + sweep) + test coupon
-  figure.py      # one ceiling module: back-plate + channels -> STL/STEP + manifest.json
-  calibrate.py   # neon snap-fit coupons across slot clearances (tune before committing)
-  render.py      # headless STL -> PNG preview
-  index.html     # Three.js viewer (toggles, explode, bloom glow) — reads out/manifest.json
-  out/           # exported .stl/.step + manifest.json  (gitignored)
+  channel.py    # core: snap-groove host, neon, bracket, test coupon (HostParams)
+  figure.py     # one 9x5 m module -> STL/STEP + manifest.json (reads paths.json if present)
+  calibrate.py  # neon snap-fit coupons across slot clearances
+  render.py     # headless STL -> PNG
+  ideate.html   # WEB TOOL: draw neon bodies on a glossy ceiling, glow + animate, export paths.json
+  index.html    # 3D preview: glossy host + animated neon + steel, toggles/explode/bloom
+  out/          # exported .stl/.step + manifest.json  (gitignored)
 ```
 `out/` and `.venv/` are gitignored — the `.py` files are the source of truth.
 
-## Build & review
+## Workflow
 ```sh
 cd cad
-uv run python figure.py        # generate the module + manifest.json
-uv run python calibrate.py     # (optional) neon fit coupons
-python3 -m http.server 8000    # then open http://localhost:8000/cad/
+python3 -m http.server 8000              # then open the two tools:
+#   ideate:  http://localhost:8000/cad/ideate.html   (draw -> Export paths.json)
+#   move the downloaded paths.json into cad/
+uv run python figure.py                  # regenerates host+neon around your paths
+#   preview: http://localhost:8000/cad/  (3D, animated)
+uv run python calibrate.py               # neon snap-fit coupons to print/cut & tune
 ```
-Viewer: per-part toggles, **explode** (drops the neon out of the channel mouth),
-**glow** (bloom), and a *view-from-below* button (how you'll actually see it).
 
-## Parameters (`cad/channel.py` → `ChannelParams`)
+## Parameters (`cad/channel.py` → `HostParams`, mm)
 | param | default | meaning |
 |---|---|---|
-| `neon_w` / `neon_h` | 16 / 16 mm | silicone neon-flex cross-section |
-| `wall_t` | 2 mm | aluminium return-wall thickness |
-| `wall_h` | 10 mm | wall shielding height above the neon face |
-| `back_t` | 3 mm | back-plate thickness |
-| `slot_clr` | 0.4 mm | per-side snap clearance — **tune with `calibrate.py`** |
+| `neon_w` / `neon_h` | 16 / 14 | silicone neon-flex cross-section |
+| `slot_clr` | 0.4 | per-side push-fit clearance — **tune with `calibrate.py`** |
+| `slot_depth` | 12 | groove depth into the panel |
+| `lip` | 1.2 | undercut retaining lip (dovetail bit) so it can't drop out |
+| `proud` | 2 | how far the neon sits below the panel face |
+| `panel_t` | 20 | glossy host thickness |
 
-## Status / next
-- [x] Parametric channel + neon + back-plate module, STL/STEP export, viewer.
-- [ ] Replace placeholder splines in `figure.py:PATHS` with the real figure
-      outlines (export `02 Design/2D/192 MOOD vN.ai` → SVG → node coords).
-- [ ] Split the canopy into transport/install modules; add suspension tabs.
-- [ ] Confirm a real neon-flex product (IP65+, fire class) and back its datasheet.
-- [ ] Add lead-in/lip detail to the channel mouth; fillet wall roots.
+## Open questions / next
+- [ ] **Real bodies** — draw them in `ideate.html`, or import the `.ai` outlines (SVG → `paths.json`).
+- [ ] Confirm a real neon-flex product (IP, fire class, addressable) + back its datasheet in `04 Production`.
+- [ ] Real **steel-profile** spacing/section from site → set `PROFILE_YS` + bracket type.
+- [ ] Undercut groove is a parameter today but modelled as a straight slot — add the true dovetail section.
+- [ ] Split the 9×5 m host into transport/install modules; match the faceted soffit planes.
+- [ ] Gloss + marbled finish spec for the panel.

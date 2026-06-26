@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>People in Orbit — ideate</title>
+<style>
+  :root { --panel:#15191e; --ink:#e7eaee; --muted:#8a929c; --line:#262c34; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:#060708; color:var(--ink);
+    font:13px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; overflow:hidden; }
+  #c { position:fixed; inset:0; display:block; cursor:crosshair; }
+  #ui { position:fixed; top:14px; left:14px; width:230px; background:rgba(21,25,30,.86);
+    border:1px solid var(--line); border-radius:12px; padding:14px; backdrop-filter:blur(8px);
+    box-shadow:0 10px 30px rgba(0,0,0,.5); user-select:none; }
+  h1 { font-size:13px; margin:0 0 2px; } .sub { color:var(--muted); margin:0 0 12px; font-size:11px; }
+  .swatches { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+  .sw { width:22px; height:22px; border-radius:6px; cursor:pointer; border:2px solid transparent; }
+  .sw.on { border-color:#fff; }
+  .row { display:flex; gap:6px; margin-top:8px; }
+  button { flex:1; background:#222831; color:var(--ink); border:1px solid var(--line);
+    border-radius:8px; padding:7px 6px; cursor:pointer; font:inherit; }
+  button:hover { border-color:#3a434e; } button.on { background:#3a2030; border-color:#ff2bd6; }
+  label.chk { display:flex; align-items:center; gap:7px; margin-top:9px; color:var(--muted); cursor:pointer; }
+  .hint { color:var(--muted); font-size:11px; margin-top:12px; padding-top:10px; border-top:1px solid var(--line); }
+  #count { color:var(--muted); font-size:11px; margin-top:6px; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+  <h1>People in Orbit</h1>
+  <p class="sub">draw the neon bodies · 9 × 5 m</p>
+  <div class="swatches" id="swatches"></div>
+  <div class="row">
+    <button id="mode-free" class="on">Freehand</button>
+    <button id="mode-pts">Points</button>
+  </div>
+  <div class="row">
+    <button id="undo">Undo</button>
+    <button id="clear">Clear</button>
+  </div>
+  <label class="chk"><input type="checkbox" id="animate" checked> animate (pulse + orbit)</label>
+  <label class="chk"><input type="checkbox" id="grid" checked> steel profiles</label>
+  <label class="chk"><input type="checkbox" id="cols" checked> columns</label>
+  <div class="row"><button id="export">Export paths.json</button></div>
+  <div id="count">0 bodies</div>
+  <div class="hint">Freehand: drag to draw a body. Points: click to place, double-click to finish.
+    Export → drop <b>paths.json</b> into <b>cad/</b> → <code>uv run python figure.py</code>.</div>
+</div>
+<script>
+const PALETTE = ["#ff2bd6","#00e5ff","#39ff88","#ff7a1a","#2b6bff","#ffe23d","#ff3b3b","#ffffff"];
+const CW = 9000, CH = 5000;                 // canopy mm
+const PROFILE_YS = [-1600, 0, 1600];        // steel profiles (mm, y)
+const COLS = [[-1500, 0, 250], [1500, 0, 250]]; // columns (mm) — scaled placeholders
+
+const cv = document.getElementById("c"), ctx = cv.getContext("2d");
+let DPR = Math.min(devicePixelRatio||1, 2);
+let view = { s:1, ox:0, oy:0 };             // mm->px: px = mm*s + o
+let bodies = [];                            // {pts:[[mm,mm]], color, phase}
+let color = PALETTE[0], mode = "free";
+let drawing = null;                         // in-progress body
+
+function resize(){
+  cv.width = innerWidth*DPR; cv.height = innerHeight*DPR;
+  cv.style.width = innerWidth+"px"; cv.style.height = innerHeight+"px";
+  const m = 90, availW = innerWidth-260-m, availH = innerHeight-2*m;
+  view.s = Math.min(availW/CW, availH/CH);
+  view.ox = (260 + innerWidth)/2 - 0;       // center in area right of UI
+  view.oy = innerHeight/2;
+}
+addEventListener("resize", resize); resize();
+
+const toPx = (mx,my)=>[mx*view.s+view.ox, -my*view.s+view.oy];
+const toMM = (px,py)=>[(px-view.ox)/view.s, -(py-view.oy)/view.s];
+
+// Catmull-Rom -> smooth path
+function stroke(pts){
+  if(pts.length<2) return;
+  ctx.beginPath();
+  const P = pts.map(p=>toPx(p[0],p[1]));
+  ctx.moveTo(P[0][0],P[0][1]);
+  if(P.length===2){ ctx.lineTo(P[1][0],P[1][1]); }
+  else for(let i=0;i<P.length-1;i++){
+    const p0=P[i-1]||P[i], p1=P[i], p2=P[i+1], p3=P[i+2]||p2;
+    for(let t=0;t<=1;t+=0.1){
+      const t2=t*t, t3=t2*t;
+      const x=0.5*((2*p1[0])+(-p0[0]+p2[0])*t+(2*p0[0]-5*p1[0]+4*p2[0]-p3[0])*t2+(-p0[0]+3*p1[0]-3*p2[0]+p3[0])*t3);
+      const y=0.5*((2*p1[1])+(-p0[1]+p2[1])*t+(2*p0[1]-5*p1[1]+4*p2[1]-p3[1])*t2+(-p0[1]+3*p1[1]-3*p2[1]+p3[1])*t3);
+      ctx.lineTo(x,y);
+    }
+  }
+}
+
+function neonLine(pts, col, glow){
+  if(pts.length<2) return;
+  ctx.lineCap="round"; ctx.lineJoin="round";
+  ctx.shadowColor = col; ctx.shadowBlur = 26*glow*DPR;
+  ctx.strokeStyle = col; ctx.lineWidth = 9*DPR; stroke(pts); ctx.stroke();   // glow pass
+  ctx.shadowBlur = 12*glow*DPR;
+  ctx.lineWidth = 5*DPR; stroke(pts); ctx.stroke();
+  ctx.shadowBlur = 0; ctx.strokeStyle = "#fff"; ctx.globalAlpha = 0.9*glow;
+  ctx.lineWidth = 1.6*DPR; stroke(pts); ctx.stroke(); ctx.globalAlpha = 1;   // hot core
+}
+
+let t0 = 0;
+function frame(t){
+  t0 = t/1000;
+  ctx.setTransform(1,0,0,1,0,0);
+  // glossy dark ceiling
+  const g = ctx.createRadialGradient(view.ox,view.oy*0.7,40, view.ox,view.oy,Math.max(cv.width,cv.height));
+  g.addColorStop(0,"#13161c"); g.addColorStop(1,"#060708");
+  ctx.fillStyle=g; ctx.fillRect(0,0,cv.width,cv.height);
+  // canopy plate outline
+  const [x0,y0]=toPx(-CW/2,CH/2), [x1,y1]=toPx(CW/2,-CH/2);
+  ctx.strokeStyle="#222a33"; ctx.lineWidth=1*DPR;
+  ctx.strokeRect(x0,y0,x1-x0,y1-y0);
+  ctx.fillStyle="rgba(255,255,255,.015)"; ctx.fillRect(x0,y0,x1-x0,(y1-y0)*0.5); // gloss sheen
+
+  if(document.getElementById("grid").checked){
+    ctx.strokeStyle="rgba(120,140,170,.22)"; ctx.lineWidth=2*DPR;
+    for(const py of PROFILE_YS){ const a=toPx(-CW/2,py),b=toPx(CW/2,py);
+      ctx.beginPath(); ctx.moveTo(a[0],a[1]); ctx.lineTo(b[0],b[1]); ctx.stroke(); }
+  }
+  if(document.getElementById("cols").checked){
+    for(const [cx,cy,r] of COLS){ const c=toPx(cx,cy);
+      ctx.strokeStyle="rgba(150,160,175,.5)"; ctx.lineWidth=2*DPR;
+      ctx.beginPath(); ctx.arc(c[0],c[1],r*view.s,0,7); ctx.stroke(); }
+  }
+
+  const anim = document.getElementById("animate").checked;
+  ctx.globalCompositeOperation="lighter";
+  bodies.forEach((b)=>{
+    const glow = anim ? 0.6+0.5*Math.sin(t0*1.6+b.phase) : 1;
+    let pts = b.pts;
+    if(anim){ // gentle orbital drift around nearest column
+      const col = COLS.reduce((a,c)=>{const d=(c[0]-b.cx)**2+(c[1]-b.cy)**2;return d<a.d?{c,d}:a;},{d:1e18}).c;
+      const ang = 0.05*Math.sin(t0*0.4+b.phase);
+      const ca=Math.cos(ang), sa=Math.sin(ang);
+      pts = b.pts.map(([x,y])=>{const dx=x-col[0],dy=y-col[1];return [col[0]+dx*ca-dy*sa, col[1]+dx*sa+dy*ca];});
+    }
+    neonLine(pts, b.color, glow);
+  });
+  if(drawing) neonLine(drawing.pts, drawing.color, 1);
+  ctx.globalCompositeOperation="source-over";
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+function centroid(b){ b.cx=b.pts.reduce((s,p)=>s+p[0],0)/b.pts.length; b.cy=b.pts.reduce((s,p)=>s+p[1],0)/b.pts.length; }
+function finish(){ if(drawing && drawing.pts.length>=2){ centroid(drawing); bodies.push(drawing);} drawing=null; updateCount(); }
+function updateCount(){ document.getElementById("count").textContent = bodies.length+" bodies"; }
+
+// --- pointer interaction ---
+let lastAdd=0;
+cv.addEventListener("pointerdown", e=>{
+  const [mx,my]=toMM(e.clientX*DPR, e.clientY*DPR);
+  if(mode==="free"){ drawing={pts:[[mx,my]], color, phase:Math.random()*6}; cv.setPointerCapture(e.pointerId); }
+  else { // points
+    if(!drawing) drawing={pts:[], color, phase:Math.random()*6};
+    drawing.pts.push([mx,my]);
+  }
+});
+cv.addEventListener("pointermove", e=>{
+  if(mode!=="free"||!drawing) return;
+  const now=performance.now(); if(now-lastAdd<16) return; lastAdd=now;
+  const [mx,my]=toMM(e.clientX*DPR, e.clientY*DPR);
+  const last=drawing.pts[drawing.pts.length-1];
+  if((last[0]-mx)**2+(last[1]-my)**2 > 60**2) drawing.pts.push([mx,my]);
+});
+cv.addEventListener("pointerup", ()=>{ if(mode==="free") finish(); });
+cv.addEventListener("dblclick", ()=>{ if(mode==="pts") finish(); });
+
+// --- UI ---
+const sw = document.getElementById("swatches");
+PALETTE.forEach((c,i)=>{ const d=document.createElement("div"); d.className="sw"+(i===0?" on":"");
+  d.style.background=c; d.onclick=()=>{ color=c; [...sw.children].forEach(x=>x.classList.remove("on")); d.classList.add("on"); };
+  sw.appendChild(d); });
+const setMode=m=>{ mode=m; document.getElementById("mode-free").classList.toggle("on",m==="free");
+  document.getElementById("mode-pts").classList.toggle("on",m==="pts"); drawing=null; };
+document.getElementById("mode-free").onclick=()=>setMode("free");
+document.getElementById("mode-pts").onclick=()=>setMode("pts");
+document.getElementById("undo").onclick=()=>{ bodies.pop(); updateCount(); };
+document.getElementById("clear").onclick=()=>{ bodies=[]; drawing=null; updateCount(); };
+document.getElementById("export").onclick=()=>{
+  const data = bodies.map((b,i)=>({ name:`body_${i+1}`, kind:"spline",
+    points:b.pts.map(([x,y])=>[Math.round(x),Math.round(y)]), color:b.color }));
+  const blob=new Blob([JSON.stringify(data,null,1)],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="paths.json"; a.click();
+};
+</script>
+</body>
+</html>

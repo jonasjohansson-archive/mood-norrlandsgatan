@@ -9,7 +9,7 @@ from pathlib import Path
 from dataclasses import replace
 from build123d import Pos, export_stl
 
-from channel import ChannelParams, coupon
+from channel import HostParams, coupon
 
 OUT = Path(__file__).parent / "out"
 OUT.mkdir(exist_ok=True)
@@ -21,7 +21,7 @@ LENGTH = 120.0
 
 def build():
     manifest = []
-    base = ChannelParams()
+    base = HostParams()
     for i, clr in enumerate(CLEARANCES):
         p = replace(base, slot_clr=clr)
         alu, tube = coupon(p, LENGTH)
