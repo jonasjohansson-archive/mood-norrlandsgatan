@@ -15,7 +15,7 @@ All dimensions in millimetres. Tune NEON_W / SLOT_CLR with calibrate.py.
 from dataclasses import dataclass
 from build123d import (
     BuildLine, BuildSketch, Spline, Polyline, CenterArc, Circle, Box, Cylinder,
-    Align, Pos, trace, extrude,
+    Align, Axis, Pos, fillet, trace, extrude,
 )
 
 
@@ -59,6 +59,15 @@ def path_line(kind, points):
 
 
 # ---- solids -----------------------------------------------------------------
+
+def neon_profile(p: HostParams, length: float, dome_down: bool = True):
+    """The FN-ESJT-B1023 profile as a straight bar of `length` (mm), centred on the
+    origin, running along Y. Bottom edge filleted = the emitting dome."""
+    n = Box(p.neon_w, length, p.neon_h)
+    groups = n.edges().filter_by(Axis.Y).group_by(Axis.Z)
+    edges = groups[0] if dome_down else groups[-1]
+    return fillet(edges, radius=p.neon_w / 2 - 0.1)
+
 
 def groove(line, p: HostParams):
     """Solid to SUBTRACT from the panel to form the push-fit slot (cut from below)."""
