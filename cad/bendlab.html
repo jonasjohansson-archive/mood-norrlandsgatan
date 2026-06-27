@@ -45,12 +45,13 @@
     <button id="load">Load…</button>
   </div>
   <input id="file" type="file" accept=".svg" style="display:none">
+  <label class="f">Smoothing: <b id="smv">0</b></label>
+  <input id="smooth" type="range" min="0" max="100" value="0">
   <div class="row">
-    <button id="simplify">Simplify</button>
     <button id="undo">Undo</button>
     <button id="clear">Clear</button>
   </div>
-  <label class="chk"><input type="checkbox" id="seg"> break at tight bends → pieces</label>
+  <label class="chk"><input type="checkbox" id="seg"> break at fingers / tight spots → pieces</label>
   <div class="row"><button id="export">Export SVG + JSON</button></div>
 
   <div class="stat">
@@ -64,8 +65,9 @@
 const cv=document.getElementById("c"), ctx=cv.getContext("2d");
 const DPR=Math.min(devicePixelRatio||1,2);
 let strokes=[];          // {anchors:[[mmx,mmy]], loaded}
-let minR=150, viewW=3000, figW=2500, segment=false, mode="edit";
+let minR=150, viewW=3000, figW=2500, segment=false, mode="edit", smooth=0;
 let drag=null, freehand=null;
+function targetN(s){ const full=Math.max(4,Math.min(70,Math.round(plen(s.base)/40))); return Math.max(3,Math.round(full*(1-smooth*0.0092))); }
 
 function resize(){ cv.width=innerWidth*DPR; cv.height=innerHeight*DPR;
   cv.style.width=innerWidth+"px"; cv.style.height=innerHeight+"px"; draw(); }
@@ -89,11 +91,12 @@ function catmull(A, per=14){
   return out;
 }
 function resample(pts, N){
-  if(pts.length<2) return pts.slice();
+  if(pts.length<2 || N<2) return pts.slice();
   const cum=[0]; for(let i=1;i<pts.length;i++) cum.push(cum[i-1]+Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]));
   const L=cum[cum.length-1]||1; const out=[]; let j=0;
-  for(let i=0;i<N;i++){ const d=L*i/(N-1); while(j<cum.length-1&&cum[j+1]<d) j++;
-    const t=(d-cum[j])/((cum[j+1]-cum[j])||1);
+  for(let i=0;i<N;i++){ const d=L*i/(N-1);
+    while(j<pts.length-2 && cum[j+1]<d) j++;       // keep j+1 in range
+    const seg=(cum[j+1]-cum[j])||1, t=Math.max(0,Math.min(1,(d-cum[j])/seg));
     out.push([pts[j][0]+(pts[j+1][0]-pts[j][0])*t, pts[j][1]+(pts[j+1][1]-pts[j][1])*t]); }
   return out;
 }
@@ -176,7 +179,7 @@ cv.addEventListener("pointermove", e=>{
     if(Math.hypot(last[0]-w[0],last[1]-w[1])>8*mmPerPx()) { freehand.raw.push(w); freehand.anchors=resample(freehand.raw, Math.max(3,Math.round(plen(freehand.raw)/140))); draw(); } }
 });
 cv.addEventListener("pointerup", ()=>{
-  if(freehand){ if(freehand.anchors.length>=2) strokes.push({anchors:freehand.anchors,loaded:false}); freehand=null; draw(); }
+  if(freehand){ if(freehand.raw.length>=2){ const st={loaded:false, base:freehand.raw, anchors:[]}; st.anchors=resample(freehand.raw, targetN(st)); strokes.push(st); } freehand=null; draw(); }
   drag=null;
 });
 cv.addEventListener("contextmenu", e=>e.preventDefault());
@@ -194,7 +197,7 @@ function loadSvgText(txt){
   const bw=maxx-minx, cx=(minx+maxx)/2, cy=(miny+maxy)/2, s=figW/bw;
   strokes=strokes.filter(x=>!x.loaded);
   for(const pts of raw){ const mm=pts.map(([x,y])=>[(x-cx)*s,(cy-y)*s]);
-    strokes.push({loaded:true, anchors:resample(mm, Math.max(4,Math.min(40,Math.round(plen(mm)/100))))}); }
+    const st={loaded:true, base:mm, anchors:[]}; st.anchors=resample(mm, targetN(st)); strokes.push(st); }
   document.getElementById("figrow").style.display="block"; document.getElementById("figw").style.display="block";
   draw();
 }
@@ -222,12 +225,13 @@ const $=id=>document.getElementById(id);
 $("minr").oninput=e=>{minR=+e.target.value;$("mrv").textContent=minR;draw();};
 $("vieww").oninput=e=>{viewW=+e.target.value*1000;$("vwv").textContent=(+e.target.value).toFixed(1);draw();};
 $("figw").oninput=e=>{ const nw=+e.target.value*1000, r=nw/figW; figW=nw; $("fwv").textContent=(+e.target.value).toFixed(1);
-  strokes.forEach(s=>{ if(s.loaded) s.anchors=s.anchors.map(([x,y])=>[x*r,y*r]); }); draw(); };
+  strokes.forEach(s=>{ if(s.loaded){ s.base=s.base.map(([x,y])=>[x*r,y*r]); s.anchors=s.anchors.map(([x,y])=>[x*r,y*r]); } }); draw(); };
 $("m-edit").onclick=()=>{mode="edit";$("m-edit").classList.add("on");$("m-draw").classList.remove("on");draw();};
 $("m-draw").onclick=()=>{mode="draw";$("m-draw").classList.add("on");$("m-edit").classList.remove("on");draw();};
 $("load").onclick=()=>$("file").click();
 $("file").onchange=e=>{const f=e.target.files[0]; if(f) f.text().then(loadSvgText);};
-$("simplify").onclick=()=>{ strokes.forEach(s=>{ const pts=catmull(s.anchors); s.anchors=resample(pts, Math.max(3,Math.round(s.anchors.length*0.6))); }); draw(); };
+$("smooth").oninput=e=>{ smooth=+e.target.value; $("smv").textContent=smooth;
+  strokes.forEach(s=>{ if(s.base) s.anchors=resample(s.base, targetN(s)); }); draw(); };
 $("seg").onchange=e=>{segment=e.target.checked;draw();};
 $("undo").onclick=()=>{ strokes.pop(); draw(); };
 $("clear").onclick=()=>{ strokes=[]; $("figrow").style.display="none"; $("figw").style.display="none"; draw(); };
