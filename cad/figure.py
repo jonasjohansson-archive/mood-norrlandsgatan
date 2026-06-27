@@ -10,7 +10,7 @@ stylised placeholders below are used. Paths are in mm, centred on the canopy.
 import json
 from pathlib import Path
 from build123d import (
-    BuildSketch, RectangleRounded, Rectangle, Circle, Box, Align, Pos, Locations,
+    BuildSketch, RectangleRounded, Rectangle, Circle, Box, Cylinder, Align, Pos, Locations,
     extrude, export_stl, export_step,
 )
 from channel import HostParams, path_line, groove, neon, bracket
@@ -139,6 +139,17 @@ def build():
             continue
         manifest.append(dict(name=name, file=f, color=color, kind="neon",
                              group=name, orbit=list(orbit), pos=[0, 0, 0], rot=[0, 0, 0]))
+
+    # --- columns: visible pillars hanging from the ceiling into the room ---
+    if CEIL.exists():
+        pil = None
+        for col in json.loads(CEIL.read_text())["columns"]:
+            c = Pos(col["c"][0], col["c"][1], 0) * Cylinder(
+                col["r"], 1800, align=(Align.CENTER, Align.CENTER, Align.MAX))
+            pil = c if pil is None else pil + c
+        export_stl(pil, str(OUT / "columns.stl"))
+        manifest.append(dict(name="columns", file="columns.stl", color="#aab2bb",
+                             kind="column", group="columns", orbit=[0, 0], pos=[0, 0, 0], rot=[0, 0, 0]))
 
     # --- existing steel profiles (grey context, above the panel) ---
     steel = None
