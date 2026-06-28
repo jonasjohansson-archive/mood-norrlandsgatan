@@ -66,11 +66,16 @@ const VIEWS = {
 };
 // candidate panel materials (appearance + the specs that matter)
 const MATERIALS = {
-  "Phenolic gloss (Trespa/Fundermax)": { color:"#1b1f24", roughness:0.12, metalness:0.0, cc:1.0,  ccr:0.05, weather:"exterior ✓", fire:"B-s2,d0 / A2", route:"yes (abrasive)" },
-  "Solid surface (HIMACS ext.)":       { color:"#e9ebee", roughness:0.25, metalness:0.0, cc:0.6,  ccr:0.10, weather:"grade-dep.", fire:"B / A2", route:"yes (easy)" },
-  "Aluminium (anodised)":              { color:"#b9c0c7", roughness:0.35, metalness:1.0, cc:0.0,  ccr:0.2,  weather:"✓", fire:"A1", route:"hard handheld" },
-  "PVC foam (UV)":                     { color:"#23272d", roughness:0.7,  metalness:0.0, cc:0.0,  ccr:0.3,  weather:"ok (chalks)", fire:"B self-ext.", route:"yes (easy)" },
-  "Acrylic (cast)":                    { color:"#0e1216", roughness:0.05, metalness:0.0, cc:1.0,  ccr:0.03, weather:"UV ✓", fire:"✗ flammable", route:"chips" },
+  "Phenolic gloss (Trespa/Fundermax)": { color:"#1b1f24", roughness:0.12, metalness:0.0, cc:1.0, ccr:0.05,
+    cnc:"yes — abrasive (carbide + dust)", weather:"exterior ✓", fire:"B-s2,d0 / A2 ✓", cost:"~37–57k kr", note:"best all-round — recommended" },
+  "Solid surface (HIMACS ext.)": { color:"#e9ebee", roughness:0.25, metalness:0.0, cc:0.6, ccr:0.10,
+    cnc:"yes — easiest, polishable", weather:"grade-dependent", fire:"B / A2", cost:"~110–180k kr", note:"premium; heavy + pricey" },
+  "Aluminium (anodised)": { color:"#b9c0c7", roughness:0.35, metalness:1.0, cc:0.0, ccr:0.2,
+    cnc:"hard on handheld Shaper", weather:"✓", fire:"A1 ✓", cost:"~70–110k kr", note:"heavy; slow to rout" },
+  "PVC foam (UV)": { color:"#23272d", roughness:0.7, metalness:0.0, cc:0.0, ccr:0.3,
+    cnc:"yes — cuts easily (watch melt)", weather:"ok — chalks", fire:"B self-ext.", cost:"~16–27k kr", note:"cheap; weak gloss/UV" },
+  "Acrylic (cast)": { color:"#0e1216", roughness:0.05, metalness:0.0, cc:1.0, ccr:0.03,
+    cnc:"risky — chips/cracks/melts", weather:"UV ✓", fire:"✗ flammable", cost:"~30–60k kr", note:"best gloss BUT fails fire" },
 };
 // candidate neon-flex profiles (specs)
 const PROFILES = {
@@ -83,7 +88,8 @@ const params = {
   view:"canopy", mode:"plan", explode:0, seat:1.0,   // seat = neon proud (flush ~1 mm)
   material:"Phenolic gloss (Trespa/Fundermax)", hostColor:"#1b1f24", roughness:0.12, metalness:0.0,
   profile:"FN-ESJT-B0612 6×12 COB", neonColor:"#ff7a1a",
-  bloom:1.6, glow:2.4, infoMat:"", infoProf:"",
+  bloom:1.6, glow:2.4,
+  infoCNC:"", infoWeather:"", infoFire:"", infoCost:"", infoNote:"", infoProf:"",
 };
 const PRESET = {
   plan: { bg:0xeef1f4, amb:0.85, hemi:0.7,  d1:0.6,  d2:0.3,  exposure:1.2 },
@@ -115,7 +121,7 @@ function applyHost() { for (const t of toggles) if (t.kind==="host") { const m=t
 function applyMaterial() { const M = MATERIALS[params.material];
   params.hostColor=M.color; params.roughness=M.roughness; params.metalness=M.metalness;
   for (const t of toggles) if (t.kind==="host") { const m=t.mesh.material; m.color.set(M.color); m.roughness=M.roughness; m.metalness=M.metalness; if ("clearcoat" in m){ m.clearcoat=M.cc; m.clearcoatRoughness=M.ccr; } }
-  params.infoMat = `weather ${M.weather} · fire ${M.fire} · route ${M.route}`; updateInfo(); }
+  params.infoCNC=M.cnc; params.infoWeather=M.weather; params.infoFire=M.fire; params.infoCost=M.cost; params.infoNote=M.note; updateInfo(); }
 function applyProfile() { const P = PROFILES[params.profile];
   params.infoProf = `${P.w}×${P.h} mm · bend ≥${P.bend} mm · ${P.ip} · ${P.price}`; updateInfo(); }
 function applyNeonColor() { for (const t of toggles) if (t.kind==="neon") { t.mesh.material.color.set(params.neonColor); t.mesh.material.emissive.set(params.neonColor); } }
@@ -154,8 +160,12 @@ function buildGUI() {
   const L = gui.addFolder("Layers");
   for (const t of toggles) { layerProxy[t.name] = t.mesh.visible; t.ctrl = L.add(layerProxy, t.name).onChange(v => t.mesh.visible = v); }
 
-  const fI = gui.addFolder("Specs");
-  fI.add(params,"infoMat").name("Material").disable();
+  const fI = gui.addFolder("Material specs");
+  fI.add(params,"infoCNC").name("CNC").disable();
+  fI.add(params,"infoWeather").name("Weather").disable();
+  fI.add(params,"infoFire").name("Fire").disable();
+  fI.add(params,"infoCost").name("Cost").disable();
+  fI.add(params,"infoNote").name("Note").disable();
   fI.add(params,"infoProf").name("Neon").disable();
 
   const cam = gui.addFolder("Camera");
