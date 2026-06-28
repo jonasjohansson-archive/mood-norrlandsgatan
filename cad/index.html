@@ -23,6 +23,7 @@
   .btns { display:flex; gap:6px; margin-top:10px; }
   button { flex:1; background:#f1f4f8; color:var(--ink); border:1px solid var(--line);
     border-radius:8px; padding:6px; cursor:pointer; font:inherit; } button:hover { border-color:#aab4c0; }
+  button.on { background:#e3f6ea; border-color:#1aaf5d; font-weight:600; }
   #err { position:fixed; bottom:14px; left:14px; right:14px; color:#c0392b;
     font-family:ui-monospace,monospace; font-size:12px; white-space:pre-wrap; }
 </style>
@@ -32,6 +33,10 @@
 <div id="ui">
   <h1>People in Orbit</h1>
   <p class="sub">FN-ESJT-B0612 6×12 · mounting prototype</p>
+  <div class="btns" style="margin-bottom:10px">
+    <button id="m-plan" class="on">Planning</button>
+    <button id="m-live">Live</button>
+  </div>
   <div id="parts"></div>
   <div class="ctl">
     <label>Explode <span id="expv">0</span></label>
@@ -54,6 +59,10 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { STLLoader } from "three/addons/loaders/STLLoader.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 
 const errEl = document.getElementById("err");
 const fail = (m) => { errEl.textContent = m; console.error(m); };
@@ -65,13 +74,34 @@ const renderer = new THREE.WebGLRenderer({ antialias:true });
 renderer.setPixelRatio(Math.min(devicePixelRatio,2)); renderer.setSize(innerWidth,innerHeight);
 app.appendChild(renderer.domElement);
 
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
 const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = true;
-scene.add(new THREE.AmbientLight(0xffffff, 0.85));
-scene.add(new THREE.HemisphereLight(0xffffff, 0xbac4d0, 0.7));
+const amb = new THREE.AmbientLight(0xffffff, 0.85); scene.add(amb);
+const hemi = new THREE.HemisphereLight(0xffffff, 0xbac4d0, 0.7); scene.add(hemi);
 const d1 = new THREE.DirectionalLight(0xffffff, 0.6); d1.position.set(1,2,1); scene.add(d1);
 const d2 = new THREE.DirectionalLight(0xdfe8ff, 0.3); d2.position.set(-1,-0.5,-1); scene.add(d2);
 
 const root = new THREE.Group(); root.rotation.x = -Math.PI/2; scene.add(root); // Z-up -> Y-up
+
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 1.6, 0.7, 0.0);
+composer.addPass(bloom); composer.addPass(new OutputPass());
+
+let mode = "plan";   // "plan" (light, structure) | "live" (dark, glow)
+function applyMode() {
+  const live = mode === "live";
+  scene.background.set(live ? 0x060708 : 0xeef1f4);
+  amb.intensity = live ? 0.22 : 0.85; hemi.intensity = live ? 0.12 : 0.7;
+  d1.intensity = live ? 0.18 : 0.6; d2.intensity = live ? 0.1 : 0.3;
+  renderer.toneMappingExposure = live ? 1.0 : 1.2;
+  for (const t of toggles) {
+    if (t.kind === "neon") t.mesh.material.emissiveIntensity = live ? 2.4 : 0.55;
+    else if (t.kind === "host") { t.mesh.material.color.set(live ? 0x0d0f13 : 0xc8ced6);
+      t.mesh.material.roughness = live ? 0.25 : 0.55; t.mesh.material.metalness = live ? 0.1 : 0; }
+    if (t.kind === "grid" || t.kind === "steel") { t.mesh.visible = !live; if (t.cb) t.cb.checked = !live; }
+  }
+}
 
 const loader = new STLLoader();
 const toggles = [];     // { mesh, name, color, kind, baseZ }
@@ -100,8 +130,8 @@ function buildUI() {
   const box = document.getElementById("parts"); box.innerHTML = "";
   for (const t of toggles) {
     const row = document.createElement("div"); row.className = "row";
-    const cb = document.createElement("input"); cb.type="checkbox"; cb.checked=true;
-    cb.onchange = () => t.mesh.visible = cb.checked;
+    const cb = document.createElement("input"); cb.type="checkbox"; cb.checked=t.mesh.visible;
+    t.cb = cb; cb.onchange = () => t.mesh.visible = cb.checked;
     const sw = document.createElement("span"); sw.className="sw"; sw.style.background=t.color;
     const lb = document.createElement("label"); lb.textContent=t.name;
     lb.onclick = () => { cb.checked=!cb.checked; t.mesh.visible=cb.checked; };
@@ -124,7 +154,7 @@ fetch("out/manifest.json")
     for (const p of m) { try { addPart(p, await loader.loadAsync("out/"+p.file)); }
                          catch(e){ fail("load out/"+p.file+" — "+e); } }
     await addGrid();          // overlay the 2D ceiling layout (tiles + columns)
-    buildUI(); fit();
+    applyMode(); buildUI(); fit();
   }).catch(fail);
 
 // --- 2D layout overlay (tile grid + column circles) on the ceiling underside ---
@@ -147,7 +177,19 @@ async function addGrid() {
     cg.setAttribute("position", new THREE.Float32BufferAttribute(cp, 3));
     grp.add(new THREE.Line(cg, new THREE.LineBasicMaterial({ color: 0x39c97a })));
   }
-  toggles.push({ mesh: grp, name: "ceiling grid", color: "#8a99aa", kind: "grid", baseZ: 0 });
+  toggles.push({ mesh: grp, name: "matrix (existing → remove)", color: "#8a99aa", kind: "grid", baseZ: 0 });
+
+  // fixing points to whatever the matrix is mounted to (reused), ~1 m over the fill area
+  let minx = 1e9, miny = 1e9; for (const [x, y] of d.cells) { minx = Math.min(minx, x); miny = Math.min(miny, y); }
+  const fix = new THREE.Group(); root.add(fix);
+  for (const [x, y] of d.cells) {
+    const ix = Math.round((x - minx) / cs), iy = Math.round((y - miny) / cs);
+    if (ix % 2 || iy % 2) continue;
+    const fp = []; for (let i = 0; i <= 20; i++) { const a = i/20*Math.PI*2; fp.push(x+45*Math.cos(a), y+45*Math.sin(a), z); }
+    const fg = new THREE.BufferGeometry(); fg.setAttribute("position", new THREE.Float32BufferAttribute(fp, 3));
+    fix.add(new THREE.Line(fg, new THREE.LineBasicMaterial({ color: 0xff7a1a })));
+  }
+  toggles.push({ mesh: fix, name: "fixings (~1 m)", color: "#ff7a1a", kind: "grid", baseZ: 0 });
 }
 
 const $ = id => document.getElementById(id);
@@ -157,13 +199,17 @@ $("explode").oninput = e => {
 };
 $("below").onclick = () => { if(home) camera.position.set(home.tgt.x, home.tgt.y - home.s*0.95, home.tgt.z + home.s*0.02); };
 $("reset").onclick = () => { if(home){ camera.position.copy(home.pos); controls.target.copy(home.tgt);} $("explode").value=0; $("explode").dispatchEvent(new Event("input")); };
+function setMode(m){ mode=m; $("m-plan").classList.toggle("on", m==="plan"); $("m-live").classList.toggle("on", m==="live"); applyMode(); }
+$("m-plan").onclick = () => setMode("plan");
+$("m-live").onclick = () => setMode("live");
 
 addEventListener("resize", () => {
   camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth,innerHeight);
+  renderer.setSize(innerWidth,innerHeight); composer.setSize(innerWidth,innerHeight);
 });
 
-(function loop(){ requestAnimationFrame(loop); controls.update(); renderer.render(scene, camera); })();
+(function loop(){ requestAnimationFrame(loop); controls.update();
+  if (mode === "live") composer.render(); else renderer.render(scene, camera); })();
 </script>
 </body>
 </html>
