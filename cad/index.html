@@ -27,6 +27,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { STLLoader } from "three/addons/loaders/STLLoader.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
@@ -57,7 +58,8 @@ composer.addPass(bloom); composer.addPass(new OutputPass());
 
 const loader = new STLLoader();
 const toggles = []; let home = null, gui = null; const layerProxy = {};
-const EXPLODE = { neon:-1.0, bracket:0.6, steel:1.4, host:0, column:0, grid:0 };
+const EXPLODE = { neon:-1.0, bracket:0.6, steel:1.4, host:0, column:0, grid:0, building:0 };
+const gltf = new GLTFLoader();
 
 const VIEWS = {
   "canopy": "out/canopy.manifest.json",
@@ -198,16 +200,24 @@ async function addGrid() {
   toggles.push({ mesh:fix, name:"fixings (~1 m)", color:"#ff7a1a", kind:"grid" });
 }
 
+async function addBuilding() {
+  let g; try { g = await gltf.loadAsync("assets/building.glb"); } catch(e){ return; }
+  const o = g.scene; o.scale.setScalar(1000);   // Blender metres -> our mm (soffit already at origin)
+  o.visible = false;                              // off by default; turn on in Layers
+  scene.add(o);                                   // GLB is y-up like the three world (not under root)
+  toggles.push({ mesh:o, name:"building", color:"#3a4150", kind:"building" });
+}
+
 async function loadView() {
   errEl.textContent = "";
-  for (const t of toggles) { root.remove(t.mesh); t.mesh.geometry?.dispose?.(); }   // clear current
+  for (const t of toggles) { t.mesh.removeFromParent(); t.mesh.geometry?.dispose?.(); }   // clear current
   toggles.length = 0; for (const k in layerProxy) delete layerProxy[k];
   if (gui) { gui.destroy(); gui = null; }
   const url = VIEWS[params.view] || "out/manifest.json";
   const m = await fetch(url).then(r => r.ok ? r.json() : null).catch(() => null);
   if (!m) { buildGUI(); return fail("missing " + url + " — run the matching script (figure.py / detail.py / options.py)"); }
   for (const p of m) { try { addPart(p, await loader.loadAsync("out/"+p.file)); } catch(e){ fail("load out/"+p.file+" — "+e); } }
-  if (params.view === "canopy") await addGrid();    // the ceiling layout only makes sense for the canopy
+  if (params.view === "canopy") { await addGrid(); await addBuilding(); }   // ceiling layout + real building
   buildGUI(); applyMaterial(); applyProfile(); applyMode(); layout(); fit();   // keep per-figure colours (Neon→Colour overrides all)
 }
 loadView();
