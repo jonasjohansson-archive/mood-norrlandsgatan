@@ -91,7 +91,7 @@ const params = {
   material:"Phenolic gloss (Trespa/Fundermax)", hostColor:"#1b1f24", roughness:0.12, metalness:0.0,
   profile:"FN-ESJT-B0612 6×12 COB", neonColor:"#ff7a1a",
   bloom:0.8, glow:1.5,
-  bX:0, bY:0, bZ:0, bRot:0, bScale:1.0,        // building alignment
+  bX:1.5, bY:-320, bZ:0, bRot:-90, bScale:0.625,   // 2-pillar registration (building -> canopy columns)
   infoCNC:"", infoWeather:"", infoFire:"", infoCost:"", infoNote:"", infoProf:"",
 };
 const PRESET = {
@@ -169,7 +169,16 @@ function buildGUI() {
   fB.add(params,"bScale",0.2,3,0.01).name("Scale").onChange(applyBuilding);
 
   const L = gui.addFolder("Layers");
-  for (const t of toggles) { layerProxy[t.name] = t.mesh.visible; t.ctrl = L.add(layerProxy, t.name).onChange(v => t.mesh.visible = v); }
+  for (const t of toggles) {
+    layerProxy[t.name] = t.mesh.visible;
+    t.ctrl = L.add(layerProxy, t.name).onChange(v => {
+      t.mesh.visible = v;
+      if (t.kind === "building") {                 // real pillars present -> hide our placeholder columns
+        const col = toggles.find(x => x.name === "columns");
+        if (col) { col.mesh.visible = !v; layerProxy["columns"] = !v; col.ctrl?.updateDisplay(); }
+      }
+    });
+  }
 
   const fI = gui.addFolder("Material specs");
   fI.add(params,"infoCNC").name("CNC").disable();
