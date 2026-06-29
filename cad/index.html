@@ -87,7 +87,7 @@ const PROFILES = {
   "Round φ13 270°":         { w:13, h:13, bend:60,  ip:"IP67",            price:"~$2/m",  note:"bends any dir, all-round" },
 };
 const params = {
-  view:"canopy", mode:"plan", explode:0, seat:1.0,   // seat = neon proud (flush ~1 mm)
+  view:"canopy", mode:"plan", explode:0, seat:250,   // seat = neon hang below soffit (mm) at building scale
   material:"Phenolic gloss (Trespa/Fundermax)", hostColor:"#1b1f24", roughness:0.12, metalness:0.0,
   profile:"FN-ESJT-B0612 6×12 COB", neonColor:"#ff7a1a",
   bloom:0.8, glow:1.5,
@@ -156,7 +156,7 @@ function buildGUI() {
   const fN = gui.addFolder("Neon");
   fN.add(params,"profile",Object.keys(PROFILES)).name("Profile").onChange(applyProfile);
   fN.addColor(params,"neonColor").name("Colour").onChange(applyNeonColor);
-  fN.add(params,"seat",-2,20,0.1).name("Seat / flush (mm)").onChange(layout);
+  fN.add(params,"seat",-50,800,5).name("Hang below soffit (mm)").onChange(layout);
   fN.add(params,"glow",0,5,0.1).name("Glow").onChange(applyGlow);
 
   const fS = gui.addFolder("Scene");
@@ -223,7 +223,7 @@ async function addGrid() {
 let bldg = null;
 const bldMat = new THREE.MeshStandardMaterial({ color:0xc8ced6, roughness:0.7, metalness:0.0 });
 async function addBuilding() {
-  let g; try { g = await gltf.loadAsync("assets/building.glb"); } catch(e){ return; }
+  let g; try { g = await gltf.loadAsync("assets/building.glb?v=" + Date.now()); } catch(e){ return; }
   g.scene.traverse(o => { if (o.isMesh) o.material = bldMat; });   // one material we control per mode
   bldg = new THREE.Group(); bldg.add(g.scene); root.add(bldg);     // same z-up frame as the canopy
   applyBuilding(); bldg.visible = false;                            // off by default; toggle in Layers
@@ -254,6 +254,26 @@ addEventListener("resize", () => {
   camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
   renderer.setSize(innerWidth,innerHeight); composer.setSize(innerWidth,innerHeight);
 });
+// --- debug hooks for precise screenshots ---
+window.__cam = (px,py,pz, tx=0,ty=0,tz=0) => { camera.position.set(px,py,pz); controls.target.set(tx,ty,tz); controls.update(); };
+window.__frameFigures = () => {
+  const box = new THREE.Box3();
+  for (const t of toggles) if (t.kind === "neon") box.expandByObject(t.mesh);
+  if (box.isEmpty()) return null;
+  const c = box.getCenter(new THREE.Vector3()), s = box.getSize(new THREE.Vector3()).length();
+  camera.position.set(c.x, c.y - s*0.85, c.z); controls.target.copy(c);
+  camera.near = s/500; camera.far = s*50; camera.updateProjectionMatrix(); controls.update();
+  return { c:[c.x,c.y,c.z], size:[box.max.x-box.min.x, box.max.y-box.min.y, box.max.z-box.min.z] };
+};
+window.__setLayer = (name,on) => { const t=toggles.find(x=>x.name===name); if(t){ t.mesh.visible=on; if(t.ctrl){layerProxy[name]=on;t.ctrl.updateDisplay();} } };
+window.__setMode = (m) => { params.mode=m; applyMode(); };
+window.__probe = () => {
+  const fb=new THREE.Box3(), bb=new THREE.Box3();
+  for (const t of toggles){ if(t.kind==="neon") fb.expandByObject(t.mesh); if(t.kind==="building") bb.expandByObject(t.mesh); }
+  const f=b=>b.isEmpty()?null:{min:[Math.round(b.min.x),Math.round(b.min.y),Math.round(b.min.z)],max:[Math.round(b.max.x),Math.round(b.max.y),Math.round(b.max.z)]};
+  return { figures:f(fb), building:f(bb), seat:params.seat };
+};
+
 (function loop(){ requestAnimationFrame(loop); controls.update();
   if (params.mode==="live") composer.render(); else renderer.render(scene, camera); })();
 </script>
