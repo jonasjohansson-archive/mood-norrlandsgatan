@@ -52,7 +52,7 @@ const d2 = new THREE.DirectionalLight(0xdfe8ff, 0.3); d2.position.set(-1,-0.5,-1
 const root = new THREE.Group(); root.rotation.x = -Math.PI/2; scene.add(root); // Z-up -> Y-up
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 1.6, 0.7, 0.0);
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.8, 0.45, 0.05);
 composer.addPass(bloom); composer.addPass(new OutputPass());
 
 const loader = new STLLoader();
@@ -88,7 +88,7 @@ const params = {
   view:"canopy", mode:"plan", explode:0, seat:1.0,   // seat = neon proud (flush ~1 mm)
   material:"Phenolic gloss (Trespa/Fundermax)", hostColor:"#1b1f24", roughness:0.12, metalness:0.0,
   profile:"FN-ESJT-B0612 6×12 COB", neonColor:"#ff7a1a",
-  bloom:1.6, glow:2.4,
+  bloom:0.8, glow:1.5,
   infoCNC:"", infoWeather:"", infoFire:"", infoCost:"", infoNote:"", infoProf:"",
 };
 const PRESET = {
