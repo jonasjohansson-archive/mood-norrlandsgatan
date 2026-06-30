@@ -226,7 +226,7 @@ function fit() {
 }
 
 // --- live tweaks ---
-function layout() { for (const t of toggles) { let z = (EXPLODE[t.kind] ?? 0) * params.explode; if (t.kind==="neon") z -= params.seat; if (t.kind==="host") z -= params.seat + 12; t.mesh.position.z = z; } }   // host panel hangs below the soffit, neon on its underside
+function layout() { for (const t of toggles) { let z = (EXPLODE[t.kind] ?? 0) * params.explode; if (t.kind==="neon") z -= params.seat; if (t.kind==="host") z -= params.seat - 12; t.mesh.position.z = z; } }   // host panel hangs below the soffit, neon on its underside
 function applyHost() { for (const t of toggles) if (t.kind==="host") { const m=t.mesh.material; m.color.set(params.hostColor); m.roughness=params.roughness; m.metalness=params.metalness; } }
 function applyMaterial() { const M = MATERIALS[params.material];
   params.hostColor=M.color; params.roughness=M.roughness; params.metalness=M.metalness;
