@@ -1,7 +1,7 @@
 """Procurement cut list — metres of coloured silicone per colour, segment/feed
 count, and power, from the figures. Hand the per-colour totals to Flex-Neon.
 
-    cd cad && uv run python order.py
+    uv run python order.py
 
 Reads paths.json if present (from Bend Lab / svgcheck), else the placeholder bodies.
 ASSUMPTIONS (change at the top when you get supplier numbers):

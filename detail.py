@@ -2,7 +2,7 @@
 short cross-section you can inspect and explode. This is the part to ideate the
 ENGINEERING on (not the pattern).
 
-    cd cad && uv run python detail.py     # then open the viewer (light theme)
+    uv run python detail.py     # then open the viewer (light theme)
 
 Shows, bottom to top:
     neon-flex        pushed up into ...

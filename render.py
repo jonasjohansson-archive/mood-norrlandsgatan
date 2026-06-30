@@ -1,6 +1,6 @@
 """Headless preview of an STL -> PNG (matplotlib, no GL needed).
 
-    cd cad && uv run python render.py out/panel.stl out/_panel.png
+    uv run python render.py out/panel.stl out/_panel.png
 """
 import sys
 import numpy as np

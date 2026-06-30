@@ -6,7 +6,7 @@ to register to the building). We render EACH figure layer on its own so every fi
 gets ONE colour, bake pdftocairo's per-path transforms into absolute coords, and write
 a clean composition.svg (coloured polyline paths + 2 coloured pillar circles).
 
-    cd cad && uv run --with pikepdf,svgpathtools python ai_import.py "/path/192 MOOD Figures.ai"
+    uv run --with pikepdf,svgpathtools python ai_import.py "/path/192 MOOD Figures.ai"
 """
 import sys, re, subprocess
 from pathlib import Path

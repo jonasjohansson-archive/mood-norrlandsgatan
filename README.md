@@ -27,7 +27,8 @@ figure .ai ─▶ Bend Lab (edit shape, all-green) ─▶ paths.json
 
 ## Layout
 ```
-cad/
+  index.html    the 3D viewer (served at http://localhost/mood-norrlandsgatan/)
+  ai_import.py  import figures from the Illustrator file (per-layer colour) -> composition.svg
   channel.py    core params (HostParams = 6x12 profile), snap-groove, neon, coupon
   detail.py     engineering detail: dovetail snap + bracket + steel profile
   options.py    mounting-option comparison (groove vs alu track vs clips)
@@ -47,9 +48,9 @@ cad/
 ## Use
 Served by the local web server (docroot = `~/Documents/GitHub`):
 ```
-  bend lab:  http://localhost/mood-norrlandsgatan/cad/bendlab.html   (edit a figure -> Export)
-  3D view:   http://localhost/mood-norrlandsgatan/cad/               (run figure.py first)
-  bend map:  http://localhost/mood-norrlandsgatan/cad/out/check_<name>.svg
+  bend lab:  http://localhost/mood-norrlandsgatan/bendlab.html   (edit a figure -> Export)
+  3D view:   http://localhost/mood-norrlandsgatan/               (run figure.py first)
+  bend map:  http://localhost/mood-norrlandsgatan/out/check_<name>.svg
 ```
 ```sh
 cd cad
@@ -59,7 +60,7 @@ uv run python order.py          # cut list / bill of materials
 uv run python calibrate.py      # snap-fit coupons to tune the push-fit
 ```
 
-## Parameters (`cad/channel.py` → `HostParams`, mm)
+## Parameters (`channel.py` → `HostParams`, mm)
 | param | default | meaning |
 |---|---|---|
 | `neon_w` / `neon_h` | 6 / 12 | FN-ESJT-B0612 foot width / full height |

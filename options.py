@@ -1,7 +1,7 @@
 """Mounting-option comparison — three ways to "slot it into something", side by side.
 Toggle / explode them in the viewer to choose how the FN-ESJT-B1023 neon is held.
 
-    cd cad && uv run python options.py     # then open the viewer
+    uv run python options.py     # then open the viewer
 
 Each row is a 120 mm cross-section, neon dome facing DOWN (into the room):
   A  routed lipped groove in a glossy host  — continuous grip, any CNC curve  (recommended)

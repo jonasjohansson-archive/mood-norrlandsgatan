@@ -2,7 +2,7 @@
  - 3 straight grooves (dial in bit/depth + snap fit)
  - arcs at r = 120 / 90 / 60 mm (bend test: 90 = assumed min, 60 should fail)
 
-    cd cad && uv run python shaper_coupon.py   ->  out/shaper/coupon.svg
+    uv run python shaper_coupon.py   ->  out/shaper/coupon.svg
 Cut ON-LINE with the dovetail bit, then push a length of FN-ESJT-B0612 in.
 """
 from pathlib import Path

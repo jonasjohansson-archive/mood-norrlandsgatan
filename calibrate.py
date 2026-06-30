@@ -2,7 +2,7 @@
 like before committing the whole canopy. Each segment uses a different per-side
 clearance; pick the one where the neon-flex pushes in and stays put overhead.
 
-    cd cad && uv run python calibrate.py
+    uv run python calibrate.py
 """
 import json
 from pathlib import Path

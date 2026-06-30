@@ -4,7 +4,7 @@ The Origin follows SVG paths. Run each body outline as an ON-LINE cut with a
 DOVETAIL bit: the bit is narrow at the surface, wider below, so one pass gives the
 undercut groove the neon body snaps into. Dome then sits proud below the face.
 
-    cd cad && uv run python shaper.py
+    uv run python shaper.py
 
 Writes out/shaper/<body>.svg (one per body, for repositioning with Shaper Tape)
 and out/shaper/all.svg (the whole canopy, 1:1). SVG is in real mm.

@@ -8,7 +8,7 @@ simplify and flag bends tighter than the LED-flex minimum. Writes:
   out/<name>.paths.json    registered points (mm, building frame)
   out/paths.json           canonical (pipeline reads this)
 
-    cd cad && uv run --with svgpathtools python svgcheck.py figures/composition.svg [simplify_mm]
+    uv run --with svgpathtools python svgcheck.py figures/composition.svg [simplify_mm]
 """
 import sys, json, math, re
 from pathlib import Path

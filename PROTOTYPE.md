@@ -12,7 +12,7 @@ Goal: prove the **snap-fit** and the **bend** before cutting a full sheet.
 
 ## Cut the coupon
 File: `out/shaper/coupon.svg` (1:1 mm) →
-`http://localhost/mood-norrlandsgatan/cad/out/shaper/coupon.svg`
+`http://localhost/mood-norrlandsgatan/out/shaper/coupon.svg`
 - Import to the Origin, **On-Line** cut, **Shaper Tape** to register.
 - 3 straight grooves = dial in **bit + depth + fit**.
 - Arcs **r=120 / 90 / 60 mm** = bend test (90 = assumed min; 60 should kink/fail).

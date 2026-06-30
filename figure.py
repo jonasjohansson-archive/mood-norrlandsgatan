@@ -1,7 +1,7 @@
 """People in Orbit — one ceiling module: a glossy snap-groove HOST panel carrying
 neon-flex bodies, bracketed to the existing ceiling STEEL PROFILES.
 
-    cd cad && uv run python figure.py
+    uv run python figure.py
 
 If `paths.json` exists (next to this file or in out/), the bodies are taken from
 it — that's what the web ideation tool (ideate.html) exports. Otherwise the

@@ -1,7 +1,7 @@
 """Import the ceiling layout SVG (50 cm tile grid + columns) -> ceiling.json,
 which figure.py uses to build the real soffit footprint at true scale.
 
-    cd cad && uv run python ceiling_import.py "/path/Asset 8.svg"
+    uv run python ceiling_import.py "/path/Asset 8.svg"
 """
 import re, json, sys
 from pathlib import Path
