@@ -26,7 +26,6 @@
 <script type="module">
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
 import { STLLoader } from "three/addons/loaders/STLLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
@@ -50,44 +49,55 @@ renderer.setPixelRatio(Math.min(devicePixelRatio,2)); renderer.setSize(innerWidt
 renderer.toneMapping = THREE.ACESFilmicToneMapping; app.appendChild(renderer.domElement);
 const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = true;
 
-// --- first-person walk / fly camera (toggle in the Camera folder) ---
-const fpc = new PointerLockControls(camera, renderer.domElement);
+// --- first-person walk / fly camera: WASD/EQ move, click-drag to look ---
 const keys = {}; const wclock = new THREE.Clock();
 let camMode = "orbit", fly = false;
+let dragging = false, lastX = 0, lastY = 0, yaw = 0, pitch = 0;
+const LOOK = 0.0026, UP = new THREE.Vector3(0,1,0);
 addEventListener("keydown", e => {
-  if (camMode !== "walk" || !fpc.isLocked) return;
-  if (e.code === "KeyF") { fly = !fly; updateInfo?.(); showWalkHint(); }
+  if (camMode !== "walk") return;
+  if (e.code === "KeyF") { fly = !fly; showWalkHint(); }
   keys[e.code] = true;
 });
 addEventListener("keyup", e => { keys[e.code] = false; });
-renderer.domElement.addEventListener("click", () => { if (camMode === "walk") fpc.lock(); });
+renderer.domElement.addEventListener("mousedown", e => { if (camMode==="walk" && e.button===0) { dragging=true; lastX=e.clientX; lastY=e.clientY; } });
+addEventListener("mouseup", () => { dragging=false; });
+addEventListener("mousemove", e => {
+  if (!dragging || camMode !== "walk") return;
+  yaw   -= (e.clientX - lastX) * LOOK;
+  pitch -= (e.clientY - lastY) * LOOK;
+  pitch = Math.max(-1.45, Math.min(1.45, pitch));
+  lastX = e.clientX; lastY = e.clientY;
+  camera.quaternion.setFromEuler(new THREE.Euler(pitch, yaw, 0, "YXZ"));
+});
 const hint = document.createElement("div");
 hint.style.cssText = "position:fixed;left:50%;top:16px;transform:translateX(-50%);z-index:20;color:#dfe6ef;background:rgba(10,14,22,.72);padding:7px 13px;border-radius:7px;font:12px/1.3 ui-monospace,monospace;pointer-events:none;display:none;text-align:center";
 document.body.appendChild(hint);
 function showWalkHint() {
-  hint.innerHTML = fpc.isLocked
-    ? `WASD move · mouse look · <b>F</b> fly ${fly ? "ON" : "off"}${fly ? " · E up · Q down" : ""} · Esc release`
-    : "Click to walk · WASD move · mouse look · F fly · Esc release";
+  hint.innerHTML = `Drag to look · WASD move · <b>F</b> fly ${fly ? "ON · E up · Q down" : "off"}`;
   hint.style.display = (camMode === "walk") ? "block" : "none";
 }
-fpc.addEventListener("lock", showWalkHint); fpc.addEventListener("unlock", showWalkHint);
 function setCamMode(m) {
   camMode = m;
   if (m === "walk") {
-    controls.enabled = false;
+    controls.enabled = false; dragging = false;
     const t = home ? home.tgt : new THREE.Vector3();
     camera.position.set(t.x, FLOOR_Y + 1650, t.z + 7000);   // stand back on the street
     camera.lookAt(t.x, t.y, t.z);                            // look up at the lit soffit
-  } else { fpc.unlock(); controls.enabled = true; }
+    const e = new THREE.Euler().setFromQuaternion(camera.quaternion, "YXZ"); yaw = e.y; pitch = e.x;
+  } else { controls.enabled = true; }
   showWalkHint();
 }
 function updateWalk(dt) {
-  if (camMode !== "walk" || !fpc.isLocked) return;
+  if (camMode !== "walk") return;
   const sp = (keys["ShiftLeft"] || keys["ShiftRight"] ? 14000 : 5000) * dt;
-  if (keys["KeyW"]) fpc.moveForward(sp);
-  if (keys["KeyS"]) fpc.moveForward(-sp);
-  if (keys["KeyA"]) fpc.moveRight(-sp);
-  if (keys["KeyD"]) fpc.moveRight(sp);
+  const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd);
+  const flat = new THREE.Vector3(fwd.x, 0, fwd.z).normalize();        // walk on the horizontal
+  const right = new THREE.Vector3().crossVectors(flat, UP).normalize();
+  if (keys["KeyW"]) camera.position.addScaledVector(flat, sp);
+  if (keys["KeyS"]) camera.position.addScaledVector(flat, -sp);
+  if (keys["KeyD"]) camera.position.addScaledVector(right, sp);
+  if (keys["KeyA"]) camera.position.addScaledVector(right, -sp);
   if (fly) {
     if (keys["KeyE"]) camera.position.y += sp;
     if (keys["KeyQ"]) camera.position.y -= sp;
