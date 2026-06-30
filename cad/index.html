@@ -34,13 +34,14 @@ import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js"
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { Reflector } from "three/addons/objects/Reflector.js";
+import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
 import { GUI } from "three/addons/libs/lil-gui.module.min.js";
 
 const errEl = document.getElementById("err");
 const fail = m => { errEl.textContent = m; console.error(m); };
 
 const app = document.getElementById("app");
-const scene = new THREE.Scene(); scene.background = new THREE.Color(0xeef1f4);
+const scene = new THREE.Scene(); const bgColor = new THREE.Color(0xeef1f4); scene.background = bgColor;
 const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 1, 500000);
 const renderer = new THREE.WebGLRenderer({ antialias:true });
 renderer.setPixelRatio(Math.min(devicePixelRatio,2)); renderer.setSize(innerWidth,innerHeight);
@@ -60,7 +61,13 @@ composer.addPass(bloom); composer.addPass(new OutputPass());
 
 // realistic environment lighting (soft reflections + ambient on every surface)
 const pmrem = new THREE.PMREMGenerator(renderer);
-scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;   // fallback until HDRI loads
+let hdrTex = null;
+new RGBELoader().load("assets/night_1k.hdr", tex => {
+  tex.mapping = THREE.EquirectangularReflectionMapping; hdrTex = tex;
+  scene.environment = pmrem.fromEquirectangular(tex).texture;               // realistic night reflections
+  if (typeof applyMode === "function") applyMode();
+});
 scene.fog = new THREE.Fog(0x05070a, 18000, 60000);
 
 // reflective floor ~3 m below the soffit (the street, catches the neon)
@@ -103,13 +110,13 @@ const params = {
   view:"canopy", mode:"plan", explode:0, seat:250,   // seat = neon hang below soffit (mm) at building scale
   material:"Phenolic gloss (Trespa/Fundermax)", hostColor:"#1b1f24", roughness:0.12, metalness:0.0,
   profile:"FN-ESJT-B0612 6×12 COB", neonColor:"#ff7a1a",
-  bloom:0.8, glow:1.5, floor:true,
+  bloom:0.8, glow:1.5, floor:true, sky:true,
   bX:0, bY:0, bZ:0, bRot:0, bScale:1.0,        // building at real scale; canopy is registered to it
   infoCNC:"", infoWeather:"", infoFire:"", infoCost:"", infoNote:"", infoProf:"",
 };
 const PRESET = {
   plan: { bg:0xeef1f4, amb:0.85, hemi:0.7,  d1:0.6,  d2:0.3,  exposure:1.2, env:0.9 },
-  live: { bg:0x0a0e16, amb:0.40, hemi:0.30, d1:0.25, d2:0.15, exposure:1.1, env:0.45 },  // dusk: scene reads, neon still pops
+  live: { bg:0x0a0e16, amb:0.30, hemi:0.22, d1:0.20, d2:0.12, exposure:1.05, env:0.6 },  // night HDRI lights it; neon pops
 };
 
 function material(p) {
@@ -148,7 +155,11 @@ function updateInfo() { if (gui) gui.controllersRecursive().forEach(c => c.updat
 function applyGlow() { for (const t of toggles) if (t.kind==="neon") t.mesh.material.emissiveIntensity = params.mode==="live" ? params.glow : 0.55; bloom.strength = params.bloom; }
 function applyMode() {
   const live = params.mode==="live", P = PRESET[params.mode];
-  scene.background.set(P.bg); amb.intensity=P.amb; hemi.intensity=P.hemi; d1.intensity=P.d1; d2.intensity=P.d2;
+  bgColor.set(P.bg);
+  scene.background = (live && params.sky && hdrTex) ? hdrTex : bgColor;     // HDRI night sky in live
+  scene.backgroundBlurriness = (live && params.sky && hdrTex) ? 0.3 : 0;
+  scene.backgroundIntensity = live ? 0.18 : 1.0;
+  amb.intensity=P.amb; hemi.intensity=P.hemi; d1.intensity=P.d1; d2.intensity=P.d2;
   renderer.toneMappingExposure = P.exposure; scene.environmentIntensity = P.env;
   scene.fog.color.set(P.bg); scene.fog.near = live ? 14000 : 40000; scene.fog.far = live ? 70000 : 200000;
   bldMat.color.set(live ? 0x14181f : 0xc8ced6); bldMat.roughness = live ? 0.5 : 0.7;  // dark-but-lit building in live
@@ -179,6 +190,7 @@ function buildGUI() {
   const fS = gui.addFolder("Scene");
   fS.add(params,"bloom",0,3,0.05).name("Bloom (live)").onChange(() => bloom.strength = params.bloom);
   fS.add(params,"floor").name("Floor (reflective)").onChange(v => { if (floor) floor.visible = v; });
+  fS.add(params,"sky").name("Night sky (HDRI)").onChange(applyMode);
 
   const fB = gui.addFolder("Building align");   // dial onto the real pillars
   fB.add(params,"bX",-9000,9000,10).name("X (mm)").onChange(applyBuilding);
