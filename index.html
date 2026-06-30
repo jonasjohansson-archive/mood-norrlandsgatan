@@ -90,7 +90,7 @@ function setCamMode(m) {
 }
 function updateWalk(dt) {
   if (camMode !== "walk") return;
-  const sp = (keys["ShiftLeft"] || keys["ShiftRight"] ? 14000 : 5000) * dt;
+  const sp = (keys["ShiftLeft"] || keys["ShiftRight"] ? 4500 : 1500) * dt;   // ~1.5 m/s walk, ~4.5 m/s jog (Shift)
   const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd);
   const flat = new THREE.Vector3(fwd.x, 0, fwd.z).normalize();        // walk on the horizontal
   const right = new THREE.Vector3().crossVectors(flat, UP).normalize();
