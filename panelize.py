@@ -15,7 +15,8 @@ from pathlib import Path
 HERE = Path(__file__).parent; OUT = HERE / "out"
 PW = float(sys.argv[1]) if len(sys.argv) > 1 else 1400.0
 PH = float(sys.argv[2]) if len(sys.argv) > 2 else PW
-THICK_MM, DENSITY = 9.0, 1.45e-6   # 9 mm compact phenolic, ~1.45 g/cm^3 -> kg/mm^3*1e? (see weight calc)
+THICK_MM, DENSITY = 6.0, 1.45e-6   # Trespa Meteon 6 mm black RAL 9005 (~1.45 g/cm^3 -> kg)
+MAX_W, MAX_H = 2300.0, 1100.0      # supplier cut-to-size limit
 
 cells = json.load(open(HERE / "ceiling.json"))["cells"]
 cs = json.load(open(HERE / "ceiling.json"))["cell_mm"]
@@ -90,5 +91,6 @@ out = {"panel_w": PW, "panel_h": PH, "origin": [round(ox,1), round(oy,1)],
        "panels": panels, "vlines": [round(v,1) for v in lines_v], "hlines": [round(h,1) for h in lines_h],
        "breaks": breaks}
 (OUT / "panels.json").write_text(json.dumps(out))
-print(f"panel {PW:.0f}x{PH:.0f} mm ({area:.1f} m^2, ~{kg:.1f} kg @ {THICK_MM:.0f}mm phenolic)")
+warn = "  ⚠ EXCEEDS 230x110 cm supplier max!" if (PW > MAX_W or PH > MAX_H) else ""
+print(f"panel {PW:.0f}x{PH:.0f} mm ({area:.1f} m^2, ~{kg:.1f} kg @ {THICK_MM:.0f}mm Trespa){warn}")
 print(f"panels: {len(panels)}   seam breaks/power points: {len(breaks)}   grid offset {ox-x0:.0f},{oy-y0:.0f} mm (dodges figures)")
