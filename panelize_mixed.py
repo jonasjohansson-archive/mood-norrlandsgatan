@@ -12,7 +12,7 @@ Writes out/panels.json (same schema the viewer + export_panels.py read).
 
     uv run python panelize_mixed.py
 """
-import json, math, bisect
+import json, math, bisect, sys
 from pathlib import Path
 from collections import defaultdict
 
@@ -20,9 +20,13 @@ HERE = Path(__file__).parent; OUT = HERE / "out"
 CS, BH, WMAX = 500.0, 1000.0, 4          # module, band height, max width (modules)
 ALPHA, BETA = 1.0, 10.0                  # panel-count vs crossing cost
 MINP, STUB_PEN = 150.0, 30.0             # min usable LED piece; penalty for stub-making cuts
+VERT = "--vertical" in sys.argv          # rotate the whole band structure 90 deg
+SWAP = (lambda p: (p[1], p[0])) if VERT else (lambda p: (p[0], p[1]))
 
-d = json.load(open(HERE / "ceiling.json")); cells = d["cells"]; tcs = d["cell_mm"]
+d = json.load(open(HERE / "ceiling.json")); cells = [SWAP(c) for c in d["cells"]]; tcs = d["cell_mm"]
 bodies = [b for b in json.load(open(OUT / "paths.json")) if b.get("color") != "#f2f2f2"]
+if VERT:
+    bodies = [{**b, "points": [SWAP(p) for p in b["points"]]} for b in bodies]
 strokes, cums = [], []
 for b in bodies:
     pts = [tuple(p) for p in b["points"]]; cum = [0.0]
@@ -213,13 +217,17 @@ for s, cum in enumerate(cums):
         pieces += 1
         if b - a < MINP: stubs += 1
 
+if VERT:   # swap back to world coords
+    panels = [[p[1], p[0], p[3], p[2]] for p in panels]
+    breaks = [[p[1], p[0]] for p in breaks]
 out = {"panel_w": 2000.0, "panel_h": BH, "origin": [round(x0,1), round(y0,1)],
-       "panels": panels, "vlines": [], "hlines": [], "breaks": breaks, "mixed": True, "module_mm": CS}
+       "panels": panels, "vlines": [], "hlines": [], "breaks": breaks, "mixed": True,
+       "module_mm": CS, "orientation": "vertical" if VERT else "horizontal"}
 (OUT / "panels.json").write_text(json.dumps(out))
 
 from collections import Counter
 sizes = Counter(f"{(p[2]-p[0])/1000:.1f}x{(p[3]-p[1])/1000:.1f}" for p in panels)
-print(f"v2 layout: {len(panels)} panels ({len(portraits)} portrait), {len(breaks)} breaks, "
+print(f"v2 layout ({'vertical' if VERT else 'horizontal'} bands): {len(panels)} panels ({len(portraits)} portrait), {len(breaks)} breaks, "
       f"{pieces} LED pieces, {stubs} stubs <{MINP:.0f}mm")
 for sz, n in sizes.most_common():
     w, h = (float(v) for v in sz.split("x"))

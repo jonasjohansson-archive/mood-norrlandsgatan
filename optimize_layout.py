@@ -11,7 +11,7 @@ run). Then re-run panelize_mixed.py + export_panels.py.
 
     uv run python optimize_layout.py
 """
-import json, math, bisect
+import json, math, bisect, sys
 from pathlib import Path
 from collections import defaultdict
 
@@ -22,9 +22,13 @@ TR = [-300, -200, -100, 0, 100, 200, 300]
 ROT = [-10, -6, -3, 0, 3, 6, 10]
 SC = [1.0, 0.96, 0.92, 0.88]
 PASSES = 2
+VERT = "--vertical" in sys.argv          # optimize against vertical bands (transposed space)
+SWAP = (lambda p: [p[1], p[0]]) if VERT else (lambda p: [p[0], p[1]])
 
-d = json.load(open(HERE / "ceiling.json")); cells = d["cells"]; tcs = d["cell_mm"]
+d = json.load(open(HERE / "ceiling.json")); cells = [SWAP(c) for c in d["cells"]]; tcs = d["cell_mm"]
 bodies = json.load(open(OUT / "paths.json"))
+if VERT:
+    for b in bodies: b["points"] = [SWAP(p) for p in b["points"]]
 xs = [c[0] for c in cells]; ys = [c[1] for c in cells]
 x0, x1 = min(xs)-tcs/2, max(xs)+tcs/2; y0, y1 = min(ys)-tcs/2, max(ys)+tcs/2
 NX = math.ceil((x1-x0)/CS)
@@ -151,6 +155,8 @@ for c, idxs in figs.items():
     if state[c] == [0.0, 0.0, 0.0, 1.0]: continue
     for i in idxs:
         bodies[i]["points"] = [[round(q[0], 1), round(q[1], 1)] for q in (xf(c, p) for p in bodies[i]["points"])]
+if VERT:
+    for b in bodies: b["points"] = [SWAP(p) for p in b["points"]]   # back to world coords
 (OUT / "paths.json").write_text(json.dumps(bodies, indent=1))
 print("applied transforms to out/paths.json")
 print({c: tuple(state[c]) for c in state if state[c] != [0.0, 0.0, 0.0, 1.0]})
