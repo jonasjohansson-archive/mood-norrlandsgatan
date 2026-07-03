@@ -57,17 +57,19 @@ def clip_stroke(pts, r):
     return out
 
 def along(poly, d):
-    """points every d mm along a polyline (incl. both ends) = clip screw positions."""
-    pts = [poly[0]]; acc = 0.0
+    """points every d mm of arc length along a polyline (incl. both ends) = clip positions."""
+    out = [poly[0]]; carry = 0.0                 # carry = arc distance since the last emitted point
     for i in range(1, len(poly)):
         a, b = poly[i-1], poly[i]; seg = math.dist(a, b)
-        while acc + d <= seg:
-            acc += d; t = ((math.dist(poly[i-1], a) + acc) if False else acc) / seg
-            pts.append((a[0]+(b[0]-a[0])*acc/seg, a[1]+(b[1]-a[1])*acc/seg))
-        acc = (acc - seg)
-        acc = acc % d if acc > 0 else 0.0
-    if math.dist(pts[-1], poly[-1]) > d*0.4: pts.append(poly[-1])
-    return pts
+        if seg <= 0: continue
+        pos = d - carry
+        while pos <= seg:
+            t = pos/seg
+            out.append((a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t))
+            pos += d
+        carry = (carry + seg) % d
+    if math.dist(out[-1], poly[-1]) > d*0.4: out.append(poly[-1])
+    return out
 
 def path_d(poly, a, e):   # local coords, y flipped to SVG (panel top = 0)
     return "M " + " L ".join(f"{x-a:.1f} {e-y:.1f}" for x, y in poly)

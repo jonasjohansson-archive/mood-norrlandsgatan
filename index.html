@@ -351,9 +351,17 @@ async function addPanels() {
     grp.add(inst);
   };
   dots(d.breaks, 50, 0xff2bd6);                          // magenta = strip break / power-injection point
-  const cl = await fetch("out/clips.json?v="+Date.now()).then(r => r.ok ? r.json() : null).catch(() => null);
-  if (cl) dots(cl.clips, 28, 0x22dd66);                  // green = back-clip screw positions
   root.add(grp);
+  const cl = await fetch("out/clips.json?v="+Date.now()).then(r => r.ok ? r.json() : null).catch(() => null);
+  if (cl?.clips?.length) {                               // green = back-clip screws, own layer (off by default)
+    const cg = new THREE.Group();
+    const inst = new THREE.InstancedMesh(new THREE.SphereGeometry(22,8,8),
+      new THREE.MeshStandardMaterial({ color:0x22dd66, emissive:0x22dd66, emissiveIntensity:0.5 }), cl.clips.length);
+    const m = new THREE.Matrix4();
+    cl.clips.forEach((p,i) => { m.makeTranslation(p[0],p[1],0); inst.setMatrixAt(i,m); });
+    cg.add(inst); root.add(cg); cg.visible = false;
+    toggles.push({ mesh:cg, name:"back clips", color:"#22dd66", kind:"panel" });
+  }
   toggles.push({ mesh:grp, name:"panels + breaks", color:"#7f8c9a", kind:"panel" });
 }
 
