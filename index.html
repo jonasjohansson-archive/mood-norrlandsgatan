@@ -463,30 +463,49 @@ async function addPanels() {
   toggles.push({ mesh:grp, name:"panel seams (mounting)", color:"#7f8c9a", kind:"panel" });
 }
 
-// --- power-feed points along the CONTINUOUS neon runs (max ~5 m per feed at 24 V) ---
-async function addPowerFeeds() {
-  const data = await fetch("out/paths.json?v="+Date.now()).then(r => r.ok ? r.json() : null).catch(() => null);
-  if (!data) return;
-  const MAXRUN = 5000;                                   // max continuous run per feed (mm) — 24 V neon-flex
-  const feeds = [];
-  for (const bd of data) {
-    const P = bd.points; if (!P || P.length < 2) continue;
-    const cum = [0]; let L = 0;
-    for (let i=1;i<P.length;i++){ L += Math.hypot(P[i][0]-P[i-1][0], P[i][1]-P[i-1][1]); cum.push(L); }
-    const nf = Math.max(1, Math.ceil(L / MAXRUN));        // feeds spread evenly, centred in their runs
-    for (let f=0; f<nf; f++){
-      const target = (f+0.5) * L / nf;
-      let i=1; while (i<cum.length && cum[i] < target) i++;
-      const t = (target - cum[i-1]) / ((cum[i]-cum[i-1]) || 1);
-      feeds.push([P[i-1][0] + t*(P[i][0]-P[i-1][0]), P[i-1][1] + t*(P[i][1]-P[i-1][1])]);
+// --- service plan: feeds grouped into zones, removable access hatches, pillar cutouts (service.py) ---
+async function addService() {
+  const s = await fetch("out/service.json?v="+Date.now()).then(r => r.ok ? r.json() : null).catch(() => null);
+  if (!s) return;
+  const grp = new THREE.Group(); root.add(grp); const M = new THREE.Matrix4();
+  for (const z of s.zones) {
+    const col = new THREE.Color(z.colour);
+    // power feeds in this zone's colour
+    if (z.feeds.length) {
+      const inst = new THREE.InstancedMesh(new THREE.SphereGeometry(55,10,10),
+        new THREE.MeshStandardMaterial({ color:col, emissive:col, emissiveIntensity:0.7 }), z.feeds.length);
+      z.feeds.forEach((p,i) => { M.makeTranslation(p[0], p[1], -35); inst.setMatrixAt(i,M); });
+      grp.add(inst);
     }
+    // "reach" lines from the access point to every feed it serves (one location → many)
+    const seg = [];
+    for (const p of z.feeds) seg.push(z.psu[0], z.psu[1], -35, p[0], p[1], -35);
+    if (seg.length) {
+      const gg = new THREE.BufferGeometry(); gg.setAttribute("position", new THREE.Float32BufferAttribute(seg,3));
+      grp.add(new THREE.LineSegments(gg, new THREE.LineBasicMaterial({ color:col, transparent:true, opacity:0.4 })));
+    }
+    // removable access hatch (screwed, figure-free panel) + PSU/junction marker at its centre
+    if (z.hatch_rect) {
+      const [a,b,c,e] = z.hatch_rect;
+      const hatch = new THREE.Mesh(new THREE.PlaneGeometry(c-a-40, e-b-40),
+        new THREE.MeshBasicMaterial({ color:col, transparent:true, opacity:0.28, side:THREE.DoubleSide }));
+      hatch.position.set((a+c)/2, (b+e)/2, -22); grp.add(hatch);
+      const scr = [[a+70,b+70],[c-70,b+70],[c-70,e-70],[a+70,e-70]];   // corner screws
+      const sd = new THREE.InstancedMesh(new THREE.SphereGeometry(28,8,8),
+        new THREE.MeshStandardMaterial({ color:col, emissive:col, emissiveIntensity:0.6 }), 4);
+      scr.forEach((p,i) => { M.makeTranslation(p[0], p[1], -24); sd.setMatrixAt(i,M); }); grp.add(sd);
+    }
+    const psu = new THREE.Mesh(new THREE.SphereGeometry(90,12,12),
+      new THREE.MeshStandardMaterial({ color:col, emissive:col, emissiveIntensity:0.9 }));
+    psu.position.set(z.psu[0], z.psu[1], -50); grp.add(psu);
   }
-  const inst = new THREE.InstancedMesh(new THREE.SphereGeometry(55,10,10),
-    new THREE.MeshStandardMaterial({ color:0xffb020, emissive:0xffb020, emissiveIntensity:0.7 }), feeds.length);
-  const m = new THREE.Matrix4();
-  feeds.forEach((p,i) => { m.makeTranslation(p[0], p[1], -35); inst.setMatrixAt(i,m); });   // just in front of the neon
-  const g = new THREE.Group(); g.add(inst); root.add(g);
-  toggles.push({ mesh:g, name:`power feeds (${feeds.length})`, color:"#ffb020", kind:"panel" });
+  // pillar cutouts (red rings the boards are notched around)
+  for (const [pid,cx,cy,r] of s.cutouts) {
+    const ring = new THREE.Mesh(new THREE.RingGeometry(r-10, r+10, 48),
+      new THREE.MeshBasicMaterial({ color:0xff3030, side:THREE.DoubleSide }));
+    ring.position.set(cx, cy, -20); grp.add(ring);
+  }
+  toggles.push({ mesh:grp, name:`service plan (${s.zones.length} zones · ${s.cutouts.length ? "cutouts" : "—"})`, color:"#ffb020", kind:"panel" });
 }
 
 // --- 2D layout overlay (matrix grid + columns + fixings) ---
@@ -552,7 +571,7 @@ async function loadView() {
     if (params.view === "canopy" && (p.kind === "neon" || p.kind === "host")) continue;   // neon = tubes; host = real sheets (addPanels)
     try { addPart(p, await loader.loadAsync("out/"+p.file)); } catch(e){ fail("load out/"+p.file+" — "+e); }
   }
-  if (params.view === "canopy") { await addNeonTubes(); await addPanels(); await addPowerFeeds(); await addGrid(); await addBuilding(); await addTouchPlates(); }   // tubes + panels + feeds + ceiling + building + touch
+  if (params.view === "canopy") { await addNeonTubes(); await addPanels(); await addService(); await addGrid(); await addBuilding(); await addTouchPlates(); }   // tubes + panels + service plan + ceiling + building + touch
   buildGUI(); applyMaterial(); applyProfile(); applyMode(); layout(); fit();   // keep per-figure colours (Neon→Colour overrides all)
   if (params.view === "canopy") applyBuildingVisibility(true);   // building shown by default, scaffolding hidden
   setCamMode(params.view === "canopy" ? params.cam : "orbit");   // walk camera by default in the canopy view
