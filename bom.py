@@ -35,7 +35,8 @@ usd = {}
 usd["Neon 24 V silicone flex, coloured (per profile), +12 %"] = tot_m * SPARE * 2.5
 usd[PSU] = psu_n * 60
 usd["ESP32 dev board (1 ceiling controller + 2 pillar sensors)"] = 3 * 8
-usd["8-ch logic-level MOSFET (IRLB3034PBF) + heatsinks/gate res."] = 8 * 4 + 10
+nch = len(ch)
+usd[f"{nch}-ch logic-level MOSFET (IRLB3034PBF) + heatsinks/gate res."] = nch * 4 + 10
 usd["Load cell + HX711 amp (per pillar)"] = 2 * 15
 usd["IP67 neon feed connectors / end caps"] = feeds * 3 + ends * 1.5
 usd["Stainless back-clips (through-slot mounting)"] = math.ceil(nclip * 1.12) * 0.25
@@ -64,8 +65,8 @@ A(f"- **{psu_n} x {PSU}** — {psu_n*PSU_W:.0f} W installed vs {tot_w:.0f} W loa
   f"so a plain constant-voltage supply is fine.\n")
 
 A("## Control\n")
-A("- **1 x ESP32** (ceiling) — 8x LEDC PWM -> 8 MOSFETs, common-anode (switch the 24 V return).")
-A(f"- **8 x IRLB3034PBF** logic-level N-MOSFET (or an 8-ch >=16 A trigger board) — blue channel peaks "
+A(f"- **1 x ESP32** (ceiling) — {nch}x LEDC PWM -> {nch} MOSFETs, common-anode (switch the 24 V return).")
+A(f"- **{nch} x IRLB3034PBF** logic-level N-MOSFET (or a {nch}-ch >=16 A trigger board) — blue channel peaks "
   f"{max(c['amps'] for c in ch):.1f} A, so size gate drive + heatsinking for >=10 A.")
 A("- **2 x ESP32 + HX711 + load cell** at the pillars — force-sensing hand-plates, ESP-NOW to the ceiling node.\n")
 

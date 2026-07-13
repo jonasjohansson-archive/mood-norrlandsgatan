@@ -19,8 +19,11 @@ paths = [b for b in json.load(open(OUT / "paths.json")) if b.get("color") != "#f
 cols = json.load(open(HERE / "ceiling.json"))["columns"]
 
 MAXRUN = 5000.0          # feed spacing at 24 V (mm)
-ZONES  = 5               # service zones = power supplies = access hatches
-ZCOL   = ["#ff5d5d", "#ffb020", "#39ff88", "#38b6ff", "#c07bff"]   # per-zone colour
+# Service is anchored on the PILLARS: that's where building power comes up and
+# where a ladder reaches. Each pillar = one service core (PSU + access hatch);
+# feeds route to their nearest pillar. Per-feed current is ~2 A so the fan-out
+# cable runs are electrically fine even at several metres.
+ZCOL   = ["#ffb020", "#38b6ff", "#39ff88", "#c07bff", "#ff5d5d"]   # per-zone colour
 
 # --- feed points along each continuous run (matches the viewer) ---
 feeds = []
@@ -37,16 +40,13 @@ for b in paths:
         feeds.append([pts[i-1][0] + u*(pts[i][0]-pts[i-1][0]),
                       pts[i-1][1] + u*(pts[i][1]-pts[i-1][1])])
 
-# --- k-means cluster the feeds into ZONES (deterministic seeding) ---
-order = sorted(range(len(feeds)), key=lambda i: feeds[i][0])
-cent = [list(feeds[order[int((k+0.5)*len(feeds)/ZONES)]]) for k in range(ZONES)]
-assign = [0]*len(feeds)
-for _ in range(40):
-    for i, f in enumerate(feeds):
-        assign[i] = min(range(ZONES), key=lambda k: (f[0]-cent[k][0])**2 + (f[1]-cent[k][1])**2)
-    for k in range(ZONES):
-        pts = [feeds[i] for i in range(len(feeds)) if assign[i] == k]
-        if pts: cent[k] = [sum(p[0] for p in pts)/len(pts), sum(p[1] for p in pts)/len(pts)]
+# --- service cores anchored on the pillars ---
+# HATCHES = how many below-ceiling access hatches. If there's climb-up access above the
+# soffit, ONE token hatch is enough (wire the rest from above); else one per pillar.
+HATCHES = 1
+cent = [list(col["c"]) for col in cols][:max(1, HATCHES)]
+ZONES = len(cent)
+assign = [min(range(ZONES), key=lambda k: (f[0]-cent[k][0])**2 + (f[1]-cent[k][1])**2) for f in feeds]
 
 # --- pillar cutouts: panels each column passes through (computed first so hatches avoid them) ---
 cutouts = []
@@ -84,7 +84,9 @@ out = {"maxrun": MAXRUN, "zones": zones, "hatches": sorted(used),
        "cutouts": cutouts, "colours": ZCOL[:ZONES]}
 json.dump(out, open(OUT / "service.json", "w"), indent=1)
 
-print(f"{len(feeds)} feeds -> {ZONES} zones · hatches (panels): {sorted(used)}")
+print(f"{len(feeds)} feeds -> {ZONES} pillar-anchored zones · hatches (panels): {sorted(used)}")
 for z in zones:
-    print(f"  zone {z['id']}: {z['n_feeds']} feeds · hatch panel {z['hatch']} · PSU @ ({z['psu'][0]:.0f},{z['psu'][1]:.0f})")
+    reach = max((math.dist(z["psu"], f) for f in z["feeds"]), default=0) / 1000
+    print(f"  zone {z['id']}: {z['n_feeds']} feeds · hatch panel {z['hatch']} @ "
+          f"({z['psu'][0]:.0f},{z['psu'][1]:.0f}) · farthest feed {reach:.1f} m")
 print(f"pillar cutouts on panels: {sorted({c[0] for c in cutouts})}")
