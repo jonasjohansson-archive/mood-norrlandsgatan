@@ -150,10 +150,20 @@ function apply(){       // simplify (RDP) + smooth (Catmull-Rom) + bounds, then 
     analyse(); render();
 }
 function exportSVG(){
-    let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}">\n`;
-    for(const r of rings) s += `<circle cx="${r.x}" cy="${r.y}" r="${r.r}" fill="none" stroke="#f2f2f2"/>\n`;
-    for(const b of bodies)                            // few anchors, smooth Béziers — clean to re-edit in Illustrator
-        s += `<path d="${crBezier(b.anchors, b.closed)}" fill="none" stroke="${b.col}" stroke-width="1"/>\n`;
+    const k = mmPerPt;                                // design-points -> real millimetres
+    const sc = P => P.map(p=>[p[0]*k, p[1]*k]);       // scale a point list
+    const vb = viewBox.split(/[\s,]+/).map(Number);
+    const W = (vb[2]*k), H = (vb[3]*k);
+    let s = `<svg xmlns="http://www.w3.org/2000/svg" width="${W.toFixed(1)}mm" height="${H.toFixed(1)}mm" `
+          + `viewBox="${(vb[0]*k).toFixed(1)} ${(vb[1]*k).toFixed(1)} ${W.toFixed(1)} ${H.toFixed(1)}">\n`;
+    // real 8x17 neon: stroke-width = profile width in mm, round caps/joins, in true-mm coordinates
+    const sw = S.w;
+    for(const r of rings)
+        s += `<circle cx="${(r.x*k).toFixed(1)}" cy="${(r.y*k).toFixed(1)}" r="${(r.r*k).toFixed(1)}" `
+           + `fill="none" stroke="#f2f2f2" stroke-width="${sw}"/>\n`;
+    for(const b of bodies)                            // few anchors, smooth Béziers, at real neon width
+        s += `<path d="${crBezier(sc(b.anchors), b.closed)}" fill="none" stroke="${b.col}" `
+           + `stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round"/>\n`;
     s += "</svg>\n";
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([s], {type:"image/svg+xml"}));
