@@ -447,7 +447,8 @@ async function addPanels() {
     pts.forEach((p,i) => { m.makeTranslation(p[0],p[1],0); inst.setMatrixAt(i,m); });
     grp.add(inst);
   };
-  dots(d.breaks, 50, 0xff2bd6);                          // magenta = strip break / power-injection point
+  // (panel seams no longer break the neon — the flexible neon runs continuously across joints,
+  //  installed after the boards are up. Seams are mounting-only; power feeds are their own layer.)
   root.add(grp);
   const cl = await fetch("out/clips.json?v="+Date.now()).then(r => r.ok ? r.json() : null).catch(() => null);
   if (cl?.clips?.length) {                               // green = back-clip screws, own layer (off by default)
@@ -459,7 +460,33 @@ async function addPanels() {
     cg.add(inst); root.add(cg); cg.visible = false;
     toggles.push({ mesh:cg, name:"back clips", color:"#22dd66", kind:"panel" });
   }
-  toggles.push({ mesh:grp, name:"panels + breaks", color:"#7f8c9a", kind:"panel" });
+  toggles.push({ mesh:grp, name:"panel seams (mounting)", color:"#7f8c9a", kind:"panel" });
+}
+
+// --- power-feed points along the CONTINUOUS neon runs (max ~5 m per feed at 24 V) ---
+async function addPowerFeeds() {
+  const data = await fetch("out/paths.json?v="+Date.now()).then(r => r.ok ? r.json() : null).catch(() => null);
+  if (!data) return;
+  const MAXRUN = 5000;                                   // max continuous run per feed (mm)
+  const feeds = [];
+  for (const bd of data) {
+    const P = bd.points; if (!P || P.length < 2) continue;
+    const cum = [0]; let L = 0;
+    for (let i=1;i<P.length;i++){ L += Math.hypot(P[i][0]-P[i-1][0], P[i][1]-P[i-1][1]); cum.push(L); }
+    const nf = Math.max(1, Math.round(L / MAXRUN));       // feeds spread evenly, centred in their runs
+    for (let f=0; f<nf; f++){
+      const target = (f+0.5) * L / nf;
+      let i=1; while (i<cum.length && cum[i] < target) i++;
+      const t = (target - cum[i-1]) / ((cum[i]-cum[i-1]) || 1);
+      feeds.push([P[i-1][0] + t*(P[i][0]-P[i-1][0]), P[i-1][1] + t*(P[i][1]-P[i-1][1])]);
+    }
+  }
+  const inst = new THREE.InstancedMesh(new THREE.SphereGeometry(55,10,10),
+    new THREE.MeshStandardMaterial({ color:0xffb020, emissive:0xffb020, emissiveIntensity:0.7 }), feeds.length);
+  const m = new THREE.Matrix4();
+  feeds.forEach((p,i) => { m.makeTranslation(p[0], p[1], -35); inst.setMatrixAt(i,m); });   // just in front of the neon
+  const g = new THREE.Group(); g.add(inst); root.add(g);
+  toggles.push({ mesh:g, name:`power feeds (${feeds.length})`, color:"#ffb020", kind:"panel" });
 }
 
 // --- 2D layout overlay (matrix grid + columns + fixings) ---
@@ -525,7 +552,7 @@ async function loadView() {
     if (params.view === "canopy" && (p.kind === "neon" || p.kind === "host")) continue;   // neon = tubes; host = real sheets (addPanels)
     try { addPart(p, await loader.loadAsync("out/"+p.file)); } catch(e){ fail("load out/"+p.file+" — "+e); }
   }
-  if (params.view === "canopy") { await addNeonTubes(); await addPanels(); await addGrid(); await addBuilding(); await addTouchPlates(); }   // tubes + panels + ceiling + building + touch
+  if (params.view === "canopy") { await addNeonTubes(); await addPanels(); await addPowerFeeds(); await addGrid(); await addBuilding(); await addTouchPlates(); }   // tubes + panels + feeds + ceiling + building + touch
   buildGUI(); applyMaterial(); applyProfile(); applyMode(); layout(); fit();   // keep per-figure colours (Neon→Colour overrides all)
   if (params.view === "canopy") applyBuildingVisibility(true);   // building shown by default, scaffolding hidden
   setCamMode(params.view === "canopy" ? params.cam : "orbit");   // walk camera by default in the canopy view
