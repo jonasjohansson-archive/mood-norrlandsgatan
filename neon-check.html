@@ -31,19 +31,21 @@
   <h1>Neon design check</h1>
   <div class="row"><label>Profile</label>
     <select id="profile">
+      <option value="8" selected>8×17 (8 mm) — chosen</option>
       <option value="6">6×12 COB (6 mm)</option>
-      <option value="6">6×16 (6 mm)</option>
       <option value="10">10×23 (10 mm)</option>
       <option value="13">Round φ13 (13 mm)</option>
     </select></div>
-  <div class="row"><label>Neon width</label><input id="w" type="range" min="4" max="16" step="1" value="6"><span class="val" id="wv"></span></div>
-  <div class="row"><label>Min bend R</label><input id="bend" type="range" min="30" max="150" step="5" value="90"><span class="val" id="bendv"></span></div>
+  <div class="row"><label>Neon width</label><input id="w" type="range" min="4" max="16" step="1" value="8"><span class="val" id="wv"></span></div>
+  <div class="row"><label>Min bend R</label><input id="bend" type="range" min="30" max="250" step="5" value="120"><span class="val" id="bendv"></span></div>
   <div class="row"><label>Min gap</label><input id="gap" type="range" min="0" max="30" step="1" value="4"><span class="val" id="gapv"></span></div>
+  <div class="row"><label>Smooth</label><input id="smooth" type="range" min="0" max="80" step="2" value="0"><span class="val" id="smoothv"></span></div>
   <div class="row"><span class="chk"><input type="checkbox" id="tThick" checked><label for="tThick">Real thickness</label></span>
     <span class="chk"><input type="checkbox" id="tBend" checked><label for="tBend"><span class="sw" style="background:#38d0ff"></span>cuts</label></span></div>
   <div class="row"><span class="chk"><input type="checkbox" id="tGap" checked><label for="tGap"><span class="sw" style="background:#ff5d6c"></span>too close</label></span>
     <span class="chk"><input type="checkbox" id="tCore" checked><label for="tCore">centreline</label></span></div>
   <button id="reload">↻ Reload SVG (after saving in Illustrator)</button>
+  <button id="download">⇩ Download smoothed SVG</button>
   <div id="stats"></div>
 </div>
 <div id="hint">figures/composition.svg · scale from the two ring circles (4803 mm apart) · drag to pan · scroll to zoom</div>
@@ -51,11 +53,16 @@
 <script>
 const cv = document.getElementById("c"), ctx = cv.getContext("2d");
 const PILLAR_MM = 4803;                       // real distance between the two pillars/rings
-let bodies = [], rings = [], mmPerPt = 1, bounds = null;
+let bodies = [], rings = [], mmPerPt = 1, bounds = null, viewBox = "0 0 1190 842";
 let view = { x:0, y:0, s:1 }, fitted = null;
 
 const $ = id => document.getElementById(id);
-const S = { w:6, bend:90, gap:4, thick:true, bendOn:true, gapOn:true, core:true };
+const S = { w:8, bend:120, gap:4, smooth:0, thick:true, bendOn:true, gapOn:true, core:true };
+function toHex(c){                                // "rgb(r,g,b)" -> #rrggbb (svgcheck matches on hex)
+    const m = /rgb\((\d+),\s*(\d+),\s*(\d+)\)/.exec(c||"");
+    if(!m) return (c && c[0]==="#") ? c : "#39ff88";
+    return "#"+[1,2,3].map(i=>(+m[i]).toString(16).padStart(2,"0")).join("");
+}
 
 function stroke(el){                              // handle stroke="" attr OR CSS-class styling (Illustrator)
     let s = el.getAttribute("stroke");
@@ -69,6 +76,7 @@ async function load(){
     host.style.cssText="position:absolute;left:0;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none";
     host.innerHTML = txt; document.body.appendChild(host);         // in-DOM so getPointAtLength + computed styles work
     const svg = host.querySelector("svg");
+    viewBox = svg.getAttribute("viewBox") || `0 0 ${svg.getAttribute("width")||1190} ${svg.getAttribute("height")||842}`;
     rings = [...svg.querySelectorAll("circle")].map(c=>({x:+c.getAttribute("cx"),y:+c.getAttribute("cy"),r:+c.getAttribute("r")}));
     bodies = [];
     for (const p of svg.querySelectorAll("path")){                 // sample any path type natively (beziers, arcs...)
@@ -76,12 +84,40 @@ async function load(){
         if(!(L>0)) continue;
         const n = Math.max(2, Math.ceil(L/1.5)), pts=[];
         for(let i=0;i<=n;i++){ const q=p.getPointAtLength(L*i/n); pts.push([q.x,q.y]); }
-        bodies.push({ col:stroke(p), pts });
+        bodies.push({ col:toHex(stroke(p)), pts, disp:pts });
     }
     mmPerPt = (rings.length>=2) ? PILLAR_MM/Math.hypot(rings[0].x-rings[1].x, rings[0].y-rings[1].y) : 1;
-    const xs=[],ys=[]; for(const b of bodies) for(const p of b.pts){xs.push(p[0]);ys.push(p[1]);}
-    bounds = { x0:Math.min(...xs), y0:Math.min(...ys), x1:Math.max(...xs), y1:Math.max(...ys) };
-    fit(); analyse(); render();
+    apply();            // smooth + bounds + analyse + render
+    fit(); render();    // frame it on (re)load
+}
+function smooth(pts, mm){
+    if(mm<=0.5 || pts.length<4) return pts;
+    const sigPt = mm/mmPerPt, step = Math.max(0.5, sigPt/2);
+    const rs = resample(pts, step);
+    const closed = Math.hypot(rs[0][0]-rs[rs.length-1][0], rs[0][1]-rs[rs.length-1][1]) < step*1.5;
+    const win = Math.max(1, Math.round(sigPt/step)), n = rs.length, out = [];
+    for(let i=0;i<n;i++){ let sx=0,sy=0,c=0;
+        for(let k=-win;k<=win;k++){ let j=i+k; j = closed ? (j+n)%n : Math.max(0,Math.min(n-1,j));
+            const w=Math.exp(-(k*k)/(win*win*0.5+1e-6)); sx+=rs[j][0]*w; sy+=rs[j][1]*w; c+=w; }
+        out.push([sx/c, sy/c]); }
+    return out;
+}
+function apply(){       // recompute smoothed geometry + bounds, then analyse + render (keeps the view)
+    for(const b of bodies) b.disp = smooth(b.pts, S.smooth);
+    let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+    for(const b of bodies) for(const p of b.disp){ if(p[0]<x0)x0=p[0]; if(p[0]>x1)x1=p[0]; if(p[1]<y0)y0=p[1]; if(p[1]>y1)y1=p[1]; }
+    if(x1>x0) bounds = {x0,y0,x1,y1};
+    analyse(); render();
+}
+function exportSVG(){
+    let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}">\n`;
+    for(const r of rings) s += `<circle cx="${r.x}" cy="${r.y}" r="${r.r}" fill="none" stroke="#f2f2f2"/>\n`;
+    for(const b of bodies){ const d = "M " + b.disp.map(p=>p[0].toFixed(2)+" "+p[1].toFixed(2)).join(" L ");
+        s += `<path d="${d}" fill="none" stroke="${b.col}" stroke-width="1"/>\n`; }
+    s += "</svg>\n";
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([s], {type:"image/svg+xml"}));
+    a.download = "composition_smoothed.svg"; a.click(); URL.revokeObjectURL(a.href);
 }
 function fit(){
     const W=cv.width, H=cv.height, m=60;
@@ -110,7 +146,7 @@ function analyse(){
     const span = Math.max(2, Math.round(30/5));   // ±30 mm window for curvature
     const all = [];                                // {x,y,bi,ai} for spacing grid
     bodies.forEach((b,bi)=>{
-        const rs = resample(b.pts, step);
+        const rs = resample(b.disp, step);
         const R = rs.map((_,i)=> (i<span||i>=rs.length-span) ? 1e9 : menger(rs[i-span],rs[i],rs[i+span])*mmPerPt);
         for(let i=0;i<rs.length;){          // one marker per contiguous tight run (the sharpest point)
             if(R[i]<S.bend){ let j=i, mn=R[i], mi=i; while(j<rs.length && R[j]<S.bend){ if(R[j]<mn){mn=R[j];mi=j;} j++; } tightPts.push(rs[mi]); i=j; }
@@ -155,12 +191,12 @@ function render(){
     // thick neon
     if(S.thick){ ctx.lineCap="round"; ctx.lineJoin="round"; ctx.globalAlpha=0.5;
         for(const b of bodies){ ctx.strokeStyle=b.col; ctx.lineWidth=wPt;
-            ctx.beginPath(); b.pts.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1])); ctx.stroke(); }
+            ctx.beginPath(); b.disp.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1])); ctx.stroke(); }
         ctx.globalAlpha=1; }
     // centreline
     if(S.core){ ctx.lineWidth=0.6/view.s;
         for(const b of bodies){ ctx.strokeStyle=b.col;
-            ctx.beginPath(); b.pts.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1])); ctx.stroke(); } }
+            ctx.beginPath(); b.disp.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1])); ctx.stroke(); } }
     // too-close (real collision — red)
     if(S.gapOn){ ctx.fillStyle="#ff5d6c";
         for(const p of closePts){ ctx.beginPath(); ctx.arc(p[0],p[1],Math.max(wPt*0.6,1/view.s),0,7); ctx.fill(); } }
@@ -181,10 +217,13 @@ cv.addEventListener("wheel", e=>{ e.preventDefault(); const f=Math.exp(-e.deltaY
 function bindRange(id, key, unit){ const el=$(id), v=$(id+"v");
     const upd=()=>{ S[key]=+el.value; v.textContent=el.value+unit; analyse(); render(); }; el.addEventListener("input",upd); upd(); }
 bindRange("w","w"," mm"); bindRange("bend","bend"," mm"); bindRange("gap","gap"," mm");
+$("smooth").addEventListener("input", e=>{ S.smooth=+e.target.value; $("smoothv").textContent=e.target.value+" mm"; apply(); });
+$("smoothv").textContent = S.smooth+" mm";
 $("profile").addEventListener("change", e=>{ $("w").value=e.target.value; $("w").dispatchEvent(new Event("input")); });
 for(const [id,key] of [["tThick","thick"],["tBend","bendOn"],["tGap","gapOn"],["tCore","core"]])
     $(id).addEventListener("change", e=>{ S[key]=e.target.checked; render(); });
 $("reload").addEventListener("click", load);
+$("download").addEventListener("click", exportSVG);
 resize(); load();
 </script>
 </body>

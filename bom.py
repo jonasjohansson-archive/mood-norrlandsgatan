@@ -16,6 +16,8 @@ bodies = json.load(open(OUT / "paths.json"))
 
 VOLTS = 24.0
 SPARE = 1.12                     # order 12 % extra neon (offcuts, tight-corner remakes)
+NEON_PER_M = 3.0                 # 8x17 mm silicone flex, USD 3.0/m (supplier quote)
+ROLL_M = 50.0                    # 50 m per roll
 PSU_W, PSU = 320.0, "Mean Well HLG-320H-24 (320 W, IP67, 24 V)"
 PSU_LOAD = 0.72                  # target continuous load fraction (longevity)
 
@@ -31,8 +33,9 @@ mains_m = round(psu_n * 5 + 15)     # ~5 m per PSU drop + a spine
 
 def money(x): return f"${x:,.0f}"
 
+rolls = math.ceil(tot_m * SPARE / ROLL_M)
 usd = {}
-usd["Neon 24 V silicone flex, coloured (per profile), +12 %"] = tot_m * SPARE * 2.5
+usd[f"Neon 8x17 24 V silicone flex, coloured, +12 % ({rolls}x {ROLL_M:.0f} m rolls)"] = tot_m * SPARE * NEON_PER_M
 usd[PSU] = psu_n * 60
 usd["ESP32 dev board (1 ceiling controller + 2 pillar sensors)"] = 3 * 8
 nch = len(ch)

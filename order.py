@@ -14,11 +14,11 @@ from shaper import catmull
 
 OUT = Path(__file__).parent / "out"; OUT.mkdir(exist_ok=True)
 
-PROFILE   = "FN-ESJT-B0612 6x12 COB, white LED in coloured silicone"
-MIN_BEND  = 90.0     # mm  (6x12 COB, assumed — confirm with supplier)
-W_PER_M   = 10.0     # W/m (white LED, assumed)
+PROFILE   = "8x17 mm silicone flex, coloured (USD 3.0/m)"
+MIN_BEND  = 120.0    # mm  (8x17, assumed — confirm side-bend radius with supplier)
+W_PER_M   = 10.0     # W/m (assumed — confirm)
 VOLT      = 24       # V
-REEL_M    = 100.0    # m per reel/carton (from catalog)
+REEL_M    = 50.0     # m per roll (supplier: 50 m/roll)
 PSU_HEADROOM = 1.25  # size drivers 25% over
 
 

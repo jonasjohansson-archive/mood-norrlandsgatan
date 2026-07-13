@@ -186,15 +186,15 @@ const MATERIALS = {
 };
 // candidate neon-flex profiles (specs)
 const PROFILES = {
-  "FN-ESJT-B0612 6×12 COB": { w:6,  h:12, bend:90,  ip:"IP65+ (confirm)", price:"$1.5/m", note:"recommended" },
-  "FN-ESJT-B0616 6×16":     { w:6,  h:16, bend:90,  ip:"IP65+",           price:"$1.5/m", note:"taller dome" },
+  "8×17 silicone (chosen)": { w:8,  h:17, bend:120, ip:"IP65+", price:"$3.0/m", note:"chosen — 50 m rolls, 10 colours" },
+  "FN-ESJT-B0612 6×12 COB": { w:6,  h:12, bend:90,  ip:"IP65+ (confirm)", price:"$2.6/m", note:"smaller option" },
   "FN-ESJT-B1023 10×23":    { w:10, h:23, bend:150, ip:"IP65+",           price:"$2.8/m", note:"stiffer bend" },
   "Round φ13 270°":         { w:13, h:13, bend:60,  ip:"IP67",            price:"~$2/m",  note:"bends any dir, all-round" },
 };
 const params = {
   view:"canopy", mode:"live", explode:0, seat:250,   // seat = neon hang below soffit (mm) at building scale
   material:"Phenolic gloss (Trespa/Fundermax)", hostColor:"#1b1f24", roughness:0.12, metalness:0.0,
-  profile:"FN-ESJT-B0612 6×12 COB", neonColor:"#ff7a1a",
+  profile:"8×17 silicone (chosen)", neonColor:"#ff7a1a",
   bloom:0.4, glow:1.5, floor:true, sky:true, ao:true, cam:"walk",   // night sky on; walk camera default
   restLevel:0.5, touchLevel:0.9,   // figures rest at 50%, hand-on-plate lifts them to 90% of full Glow
   bX:0, bY:0, bZ:0, bRot:0, bScale:1.0,        // building at real scale; canopy is registered to it
@@ -332,7 +332,7 @@ async function addNeonTubes() {
     const v = (closed ? P.slice(0, -1) : P).map(p => new THREE.Vector3(p[0], p[1], 0));
     if (v.length < 2) continue;
     const curve = new THREE.CatmullRomCurve3(v, closed);
-    const geo = new THREE.TubeGeometry(curve, Math.max(16, v.length), 6, 8, closed);
+    const geo = new THREE.TubeGeometry(curve, Math.max(16, v.length), 4, 8, closed);   // 8 mm profile → ~4 mm tube radius
     const col = new THREE.Color(bd.color || "#ff7a1a");
     const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color:col, emissive:col, emissiveIntensity:0.55, roughness:0.45 }));
     root.add(mesh);
