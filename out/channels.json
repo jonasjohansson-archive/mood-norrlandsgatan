@@ -3,8 +3,8 @@
   "ch": 1,
   "colour": "blue",
   "hex": "#2b6bff",
-  "led_m": 19.7,
-  "watts": 197,
+  "led_m": 19.6,
+  "watts": 196,
   "volts": 24.0,
   "amps": 8.2,
   "feeds": 4,
@@ -14,17 +14,28 @@
   "ch": 2,
   "colour": "green",
   "hex": "#39ff88",
-  "led_m": 16.2,
-  "watts": 162,
+  "led_m": 19.3,
+  "watts": 193,
   "volts": 24.0,
-  "amps": 6.8,
+  "amps": 8.0,
   "feeds": 4,
-  "amps_per_feed": 1.7
+  "amps_per_feed": 2.0
  },
  {
   "ch": 3,
   "colour": "yellow",
   "hex": "#ffd23d",
+  "led_m": 17.6,
+  "watts": 176,
+  "volts": 24.0,
+  "amps": 7.3,
+  "feeds": 4,
+  "amps_per_feed": 1.8
+ },
+ {
+  "ch": 4,
+  "colour": "cyan",
+  "hex": "#00e5ff",
   "led_m": 16.2,
   "watts": 162,
   "volts": 24.0,
@@ -33,58 +44,47 @@
   "amps_per_feed": 1.7
  },
  {
-  "ch": 4,
-  "colour": "cyan",
-  "hex": "#00e5ff",
-  "led_m": 15.5,
-  "watts": 155,
-  "volts": 24.0,
-  "amps": 6.4,
-  "feeds": 4,
-  "amps_per_feed": 1.6
- },
- {
   "ch": 5,
-  "colour": "pink",
-  "hex": "#ff3ea5",
-  "led_m": 11.7,
-  "watts": 117,
+  "colour": "purple",
+  "hex": "#a05bff",
+  "led_m": 13.6,
+  "watts": 136,
   "volts": 24.0,
-  "amps": 4.9,
+  "amps": 5.7,
   "feeds": 3,
-  "amps_per_feed": 1.6
+  "amps_per_feed": 1.9
  },
  {
   "ch": 6,
   "colour": "orange",
   "hex": "#ff7a1a",
-  "led_m": 11.5,
-  "watts": 115,
+  "led_m": 13.6,
+  "watts": 136,
   "volts": 24.0,
-  "amps": 4.8,
+  "amps": 5.7,
   "feeds": 4,
-  "amps_per_feed": 1.2
+  "amps_per_feed": 1.4
  },
  {
   "ch": 7,
-  "colour": "purple",
-  "hex": "#a05bff",
-  "led_m": 11.4,
-  "watts": 114,
+  "colour": "pink",
+  "hex": "#ff3ea5",
+  "led_m": 12.8,
+  "watts": 128,
   "volts": 24.0,
-  "amps": 4.8,
+  "amps": 5.3,
   "feeds": 3,
-  "amps_per_feed": 1.6
+  "amps_per_feed": 1.8
  },
  {
   "ch": 8,
   "colour": "rings",
   "hex": "#f2f2f2",
-  "led_m": 10.0,
-  "watts": 100,
+  "led_m": 10.2,
+  "watts": 102,
   "volts": 24.0,
   "amps": 4.2,
-  "feeds": 2,
-  "amps_per_feed": 2.1
+  "feeds": 4,
+  "amps_per_feed": 1.1
  }
 ]

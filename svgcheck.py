@@ -23,10 +23,13 @@ name = src.stem.replace(" ", "_")
 OUT = Path(__file__).parent / "out"; OUT.mkdir(exist_ok=True)
 
 txt = src.read_text()
-circles = re.findall(r'<circle[^>]*?cx="([-\d.]+)"\s+cy="([-\d.]+)"', txt)
-if len(circles) < 2:
+circ = []                                            # ring circles: (cx, cy, r) — used for registration AND emitted as ring bodies
+for tag in re.findall(r'<circle[^>]*>', txt):
+    cx = re.search(r'\bcx="([-\d.]+)"', tag); cy = re.search(r'\bcy="([-\d.]+)"', tag); r = re.search(r'\br="([-\d.]+)"', tag)
+    if cx and cy: circ.append((float(cx.group(1)), float(cy.group(1)), float(r.group(1)) if r else 0.0))
+if len(circ) < 2:
     raise SystemExit("need 2 column circles in the SVG to register to the pillars")
-S = sorted([(float(circles[0][0]), float(circles[0][1])), (float(circles[1][0]), float(circles[1][1]))])
+S = sorted([(circ[0][0], circ[0][1]), (circ[1][0], circ[1][1])])
 
 def register(S, T):
     """2-point similarity with REFLECTION + SWAPPED pairing — the orientation that makes the
@@ -83,13 +86,30 @@ def circumR(a,b,c):
     if A<1e-9: return math.inf
     return (math.dist(b,c)*math.dist(a,c)*math.dist(a,b))/(4*A)
 
+PALETTE=["#ff3ea5","#ffe23d","#00e5ff","#ff7a1a","#ff2bd6","#39ff88","#2b6bff"]
+cssmap={}                                            # resolve Illustrator CSS-class strokes (.cls-1{stroke:#..})
+for m in re.finditer(r'\.([A-Za-z0-9_-]+)\s*\{([^}]*)\}', txt):
+    sm2 = re.search(r'stroke\s*:\s*([^;}\s]+)', m.group(2))
+    if sm2: cssmap[m.group(1)] = sm2.group(1)
+def stroke_of(at, i):
+    s = at.get("stroke")
+    if (not s or s=="none"):                         # inline style="stroke:.."
+        m = re.search(r'stroke\s*:\s*([^;}\s]+)', at.get("style",""))
+        s = m.group(1) if m else None
+    if (not s or s=="none") and at.get("class"):      # CSS class
+        for cls in at["class"].split():
+            if cls in cssmap: s = cssmap[cls]; break
+    return (s or PALETTE[i%len(PALETTE)]).strip().lower()
+
 thr_svg = MIN_BEND_MM/scale; simplify_svg = simplify_mm/scale
 W = max(3, round(thr_svg/1.2*1.6))
 curves=[]; cols=[]; minR=math.inf
 for p, at in zip(paths, attribs):
+    col = stroke_of(at, len(cols))
+    if col == "#f2f2f2": continue                    # rings come from the <circle> elements — skip duplicate ring-paths
     d=boxsmooth(dense(p), W); N=max(4, round(p.length()/simplify_svg)); sm=catmull(resample(d,N))
     rs=[math.inf]+[circumR(sm[i-1],sm[i],sm[i+1]) for i in range(1,len(sm)-1)]+[math.inf]
-    minR=min(minR, min(rs)); curves.append((sm,rs)); cols.append(at.get("stroke") or PALETTE[len(cols)%len(PALETTE)])
+    minR=min(minR, min(rs)); curves.append((sm,rs)); cols.append(col)
 
 tight=sum(1 for _,rs in curves for r in rs if r<thr_svg); tot=sum(len(rs) for _,rs in curves)
 total_m=sum(sum(math.dist(sm[i],sm[i+1]) for i in range(len(sm)-1)) for sm,_ in curves)*scale/1000
@@ -109,10 +129,13 @@ seg=lambda sm,rs:"".join(
     f'<rect x="{b[0]:.0f}" y="{b[1]:.0f}" width="{b[2]-b[0]:.0f}" height="{b[3]-b[1]:.0f}" fill="#0e1116"/>'
     + "".join(seg(sm,rs) for sm,rs in curves) + "</svg>")
 
-PALETTE=["#ff3ea5","#ffe23d","#00e5ff","#ff7a1a","#ff2bd6","#39ff88","#2b6bff"]
 bodies=[{"name":f"{name}_{i}","kind":"spline",
          "points":[[round(v,1) for v in tf(x,y)] for x,y in sm],"color":cols[i]}
         for i,(sm,_) in enumerate(curves)]
+for j,(cx,cy,r) in enumerate(circ[:2]):              # the two pillar rings -> #f2f2f2 neon bodies
+    if r <= 0: continue
+    pts=[[round(v,1) for v in tf(cx+r*math.cos(2*math.pi*k/72), cy+r*math.sin(2*math.pi*k/72))] for k in range(73)]
+    bodies.append({"name":f"{name}_ring{j}","kind":"spline","points":pts,"color":"#f2f2f2"})
 (OUT/f"{name}.paths.json").write_text(json.dumps(bodies,indent=1))
 (OUT/"paths.json").write_text(json.dumps(bodies,indent=1))
 print(f"wrote out/check_{name}.svg, out/{name}.paths.json and out/paths.json (registered to building)")
