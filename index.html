@@ -165,6 +165,13 @@ const duskSky = makeDuskSky();
 const loader = new STLLoader();
 const toggles = []; let home = null, gui = null; const layerProxy = {};
 const EXPLODE = { neon:-1.0, bracket:0.6, steel:1.4, host:0, column:0, grid:0, building:0 };
+// mounting options: how the neon sits relative to the ceiling boards (neonZ = mm above the soffit; +up)
+const MOUNT = {
+  "A · flush (through-slot)":       { neonZ:-6,  ghost:false, concrete:false, profile:false, bldg:true },
+  "B · direct to concrete (+40cm)": { neonZ:400, ghost:true,  concrete:true,  profile:false, bldg:false },
+  "C · alu profile on surface":     { neonZ:-45, ghost:false, concrete:false, profile:true,  bldg:true },
+};
+let concreteMesh = null, profilesGroup = null;
 const gltf = new GLTFLoader();
 
 const VIEWS = {
@@ -195,7 +202,7 @@ const params = {
   view:"canopy", mode:"live", explode:0, seat:250,   // seat = neon hang below soffit (mm) at building scale
   material:"Phenolic gloss (Trespa/Fundermax)", hostColor:"#1b1f24", roughness:0.12, metalness:0.0,
   profile:"8×17 silicone (chosen)", neonColor:"#ff7a1a",
-  bloom:0.4, glow:1.5, floor:true, sky:true, ao:true, cam:"walk",   // night sky on; walk camera default
+  bloom:0.4, glow:1.5, floor:true, sky:true, ao:true, cam:"walk", mount:"A · flush (through-slot)",   // night sky on; walk camera default
   restLevel:0.5, touchLevel:0.9,   // figures rest at 50%, hand-on-plate lifts them to 90% of full Glow
   bX:0, bY:0, bZ:0, bRot:0, bScale:1.0,        // building at real scale; canopy is registered to it
   infoCNC:"", infoWeather:"", infoFire:"", infoCost:"", infoNote:"", infoProf:"",
@@ -230,7 +237,16 @@ function fit() {
 }
 
 // --- live tweaks ---
-function layout() { for (const t of toggles) { let z = (EXPLODE[t.kind] ?? 0) * params.explode; if (t.kind==="neon") z -= params.seat; if (t.kind==="host"||t.kind==="panel") z -= params.seat; t.mesh.position.z = z; } }   // sheets at the neon plane: dome flush through the slot
+function layout() {
+  const M = MOUNT[params.mount] || MOUNT["A · flush (through-slot)"];
+  for (const t of toggles) {
+    let z = (EXPLODE[t.kind] ?? 0) * params.explode;
+    if (t.kind==="neon") z += M.neonZ;                       // neon depth set by the mounting mode
+    else if (t.kind==="host"||t.kind==="panel") z += -6;     // boards at the soffit face
+    t.mesh.position.z = z;
+  }
+  if (profilesGroup) profilesGroup.position.z = M.neonZ + 5; // alu channel just behind the neon
+}
 function applyHost() { for (const t of toggles) if (t.kind==="host") { const m=t.mesh.material; m.color.set(params.hostColor); m.roughness=params.roughness; m.metalness=params.metalness; } }
 function applyMaterial() { const M = MATERIALS[params.material];
   params.hostColor=M.color; params.roughness=M.roughness; params.metalness=M.metalness;
@@ -260,6 +276,7 @@ function buildGUI() {
   gui = new GUI({ title:"People in Orbit — testbed" });
   gui.add(params,"view",Object.keys(VIEWS)).name("View").onChange(loadView);
   gui.add(params,"mode",["plan","live"]).name("Mode").onChange(applyMode);
+  gui.add(params,"mount",Object.keys(MOUNT)).name("Mounting").onChange(applyMount);
 
   // 1) navigation
   const cam = gui.addFolder("Camera");
@@ -325,6 +342,8 @@ function buildGUI() {
 async function addNeonTubes() {
   const data = await fetch("out/paths.json?v="+Date.now()).then(r => r.ok ? r.json() : null).catch(() => null);
   if (!data) return;
+  profilesGroup = new THREE.Group(); root.add(profilesGroup); profilesGroup.visible = false;   // alu channel (mount C)
+  const aluMat = new THREE.MeshStandardMaterial({ color:0x8b929a, metalness:0.9, roughness:0.4 });
   for (const bd of data) {
     const P = bd.points;
     if (!P || P.length < 2) continue;
@@ -336,9 +355,30 @@ async function addNeonTubes() {
     const col = new THREE.Color(bd.color || "#ff7a1a");
     const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color:col, emissive:col, emissiveIntensity:0.55, roughness:0.45 }));
     root.add(mesh);
+    if (bd.color !== "#f2f2f2") {                                                        // aluminium carrier profile (a bit fatter, matte)
+      profilesGroup.add(new THREE.Mesh(new THREE.TubeGeometry(curve, Math.max(16, v.length), 11, 10, closed), aluMat));
+    }
     const cx = v.reduce((s,q)=>s+q.x,0)/v.length, cy = v.reduce((s,q)=>s+q.y,0)/v.length;   // neon-frame centroid → ripple distance
     toggles.push({ mesh, name:bd.name, color:bd.color || "#ff7a1a", kind:"neon", cx, cy });
   }
+}
+// concrete slab ~40 cm above the soffit (shown in mount B)
+function addConcrete() {
+  const g = new THREE.PlaneGeometry(13000, 17000);
+  concreteMesh = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color:0x6b6b6b, roughness:0.95, metalness:0 }));
+  concreteMesh.position.set(-500, 0, 470); concreteMesh.visible = false; root.add(concreteMesh);
+}
+function applyMount() {
+  const M = MOUNT[params.mount] || MOUNT["A · flush (through-slot)"];
+  if (profilesGroup) profilesGroup.visible = M.profile;
+  if (concreteMesh) concreteMesh.visible = M.concrete;
+  for (const t of toggles) if (t.kind==="host") {                                        // ghost the boards so the recessed neon reads behind them
+    t.mesh.material.transparent = M.ghost; t.mesh.material.opacity = M.ghost ? 0.32 : 1.0; t.mesh.material.needsUpdate = true;
+  }
+  if (bldg) { bldg.visible = M.bldg; layerProxy["building"] = M.bldg;
+    for (const x of toggles) if (["grid","steel","column","bracket"].includes(x.kind)) x.mesh.visible = !M.bldg && x.mesh.visible; }
+  layout();
+  if (gui) gui.controllersRecursive().forEach(c => c.updateDisplay());
 }
 
 // --- interactive hand-plates on the pillars → brightness ripple across the figures ---
@@ -563,6 +603,8 @@ async function loadView() {
   for (const t of toggles) { t.mesh.removeFromParent(); t.mesh.geometry?.dispose?.(); }   // clear current
   root.position.y = 0; FLOOR_Y = -3000; floor.position.y = FLOOR_Y;                        // reset ground shift
   toggles.length = 0; plates.length = 0; ripples.length = 0; for (const k in layerProxy) delete layerProxy[k];
+  if (profilesGroup) { profilesGroup.removeFromParent(); profilesGroup = null; }
+  if (concreteMesh) { concreteMesh.removeFromParent(); concreteMesh = null; }
   if (gui) { gui.destroy(); gui = null; }
   const url = VIEWS[params.view] || "out/manifest.json";
   const m = await fetch(url).then(r => r.ok ? r.json() : null).catch(() => null);
@@ -571,8 +613,8 @@ async function loadView() {
     if (params.view === "canopy" && (p.kind === "neon" || p.kind === "host")) continue;   // neon = tubes; host = real sheets (addPanels)
     try { addPart(p, await loader.loadAsync("out/"+p.file)); } catch(e){ fail("load out/"+p.file+" — "+e); }
   }
-  if (params.view === "canopy") { await addNeonTubes(); await addPanels(); await addService(); await addGrid(); await addBuilding(); await addTouchPlates(); }   // tubes + panels + service plan + ceiling + building + touch
-  buildGUI(); applyMaterial(); applyProfile(); applyMode(); layout(); fit();   // keep per-figure colours (Neon→Colour overrides all)
+  if (params.view === "canopy") { await addNeonTubes(); await addPanels(); await addService(); await addGrid(); await addBuilding(); await addTouchPlates(); addConcrete(); }   // tubes + panels + service plan + ceiling + building + touch + mount
+  buildGUI(); applyMaterial(); applyProfile(); applyMode(); layout(); applyMount(); fit();   // keep per-figure colours (Neon→Colour overrides all)
   if (params.view === "canopy") applyBuildingVisibility(true);   // building shown by default, scaffolding hidden
   setCamMode(params.view === "canopy" ? params.cam : "orbit");   // walk camera by default in the canopy view
 }
@@ -599,6 +641,7 @@ window.__frameFigures = () => {
 };
 window.__setLayer = (name,on) => { const t=toggles.find(x=>x.name===name); if(t){ t.mesh.visible=on; if(t.ctrl){layerProxy[name]=on;t.ctrl.updateDisplay();} } };
 window.__setMode = (m) => { params.mode=m; applyMode(); };
+window.__mount = (name) => { const k = Object.keys(MOUNT).find(x=>x.startsWith(name)) || name; if (MOUNT[k]) { params.mount=k; applyMount(); } return params.mount; };
 window.__probe = () => {
   const fb=new THREE.Box3(), bb=new THREE.Box3();
   for (const t of toggles){ if(t.kind==="neon") fb.expandByObject(t.mesh); if(t.kind==="building") bb.expandByObject(t.mesh); }
