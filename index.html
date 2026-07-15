@@ -165,11 +165,13 @@ const duskSky = makeDuskSky();
 const loader = new STLLoader();
 const toggles = []; let home = null, gui = null; const layerProxy = {};
 const EXPLODE = { neon:-1.0, bracket:0.6, steel:1.4, host:0, column:0, grid:0, building:0 };
-// mounting options: how the neon sits relative to the ceiling boards (neonZ = mm above the soffit; +up)
+// mounting options — neon depth per mode:
+//  rel = mm from the BOARD face (boards hang `seat` below the soffit); abs = mm from the soffit itself
+//  A: 8x17 body through a 6mm board -> ~11mm protrudes below the face (dome proud)
 const MOUNT = {
-  "A · flush (through-slot)":       { neonZ:-6,  ghost:false, concrete:false, profile:false, bldg:true },
-  "B · direct to concrete (+40cm)": { neonZ:400, ghost:true,  concrete:true,  profile:false, bldg:false },
-  "C · alu profile on surface":     { neonZ:-45, ghost:false, concrete:false, profile:true,  bldg:true },
+  "A · flush (through-slot)":       { rel:-7,  ghost:false, concrete:false, profile:false, bldg:true },
+  "B · direct to concrete (+40cm)": { abs:400, ghost:true,  concrete:true,  profile:false, bldg:false },
+  "C · alu profile on surface":     { rel:-28, ghost:false, concrete:false, profile:true,  bldg:true },
 };
 let concreteMesh = null, profilesGroup = null;
 const gltf = new GLTFLoader();
@@ -239,13 +241,14 @@ function fit() {
 // --- live tweaks ---
 function layout() {
   const M = MOUNT[params.mount] || MOUNT["A · flush (through-slot)"];
+  const zB = -params.seat;                                   // board plane: boards hang `seat` mm below the soffit
   for (const t of toggles) {
     let z = (EXPLODE[t.kind] ?? 0) * params.explode;
-    if (t.kind==="neon") z += M.neonZ;                       // neon depth set by the mounting mode
-    else if (t.kind==="host"||t.kind==="panel") z += -6;     // boards at the soffit face
+    if (t.kind==="neon") z += (M.abs !== undefined) ? M.abs : zB + M.rel;   // neon depth per mounting mode
+    else if (t.kind==="host"||t.kind==="panel") z += zB;
     t.mesh.position.z = z;
   }
-  if (profilesGroup) profilesGroup.position.z = M.neonZ + 5; // alu channel just behind the neon
+  if (profilesGroup) profilesGroup.position.z = zB - 13;     // alu channel against the boards; neon dome proud below it (mount C)
 }
 function applyHost() { for (const t of toggles) if (t.kind==="host") { const m=t.mesh.material; m.color.set(params.hostColor); m.roughness=params.roughness; m.metalness=params.metalness; } }
 function applyMaterial() { const M = MATERIALS[params.material];
